@@ -44,10 +44,12 @@ class WarriorSimApp(tk.Tk):
 
         # ---------- Variables ----------
         self.stats = {
-            "strength": tk.DoubleVar(value=0),
-            "attack_power": tk.DoubleVar(value=1445),
-            "crit": tk.DoubleVar(value=31),
+            "strength": tk.DoubleVar(value=403),
+            "Agility": tk.DoubleVar(value=121),
+            "attack_power": tk.DoubleVar(value=1155),
+            "crit": tk.DoubleVar(value=31.42),
             "hit": tk.DoubleVar(value=8),
+            "Your_Armor": tk.DoubleVar(value=4234),
             "Boss_armor": tk.DoubleVar(value=4644),
             "armor_penetration": tk.DoubleVar(value=78),
             "min_dmg": tk.DoubleVar(value=106),
@@ -87,7 +89,7 @@ class WarriorSimApp(tk.Tk):
 
         # Weapon Proc Options
         self.MH_PROC_OPTIONS = ["Crusader", "Flurry Axe", "Empyrian Demolisher", "Wound"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Rend Garg", "Wound","Empyrian Demolisher" ]
+        self.OH_PROC_OPTIONS = ["Crusader_OH","Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -131,9 +133,10 @@ class WarriorSimApp(tk.Tk):
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Boss_Armor").pack(side="left")
+        ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
         ttk.Label(row, text="Damage Multiplier").pack(side="left")
         ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
-
         # ---------- Checkbox Grid ----------
         checkbox_frame = ttk.Frame(frame)
         checkbox_frame.pack(fill="x", pady=6)

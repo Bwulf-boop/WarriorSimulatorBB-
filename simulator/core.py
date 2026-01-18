@@ -145,22 +145,15 @@ class BuffTracker:
         self.uptime = {}  # Track total uptime per buff name
         self.last_update_time = 0.0
 
-    def add_buff(self, name, stat, amount, duration, start_time):
-        """
-        Add or refresh a buff. 
-        """
-        # Update uptime for currently active buffs before refreshing
-        self.update(start_time)
-
-        # Check if buff already exists
+    def add_buff(self, name, stat, amount, duration, start_time, ignore_if_active=False):
         for buff in self.active_buffs:
             if buff["name"] == name:
+                if ignore_if_active:
+                    return  # do not refresh
                 buff["start_time"] = start_time
                 buff["duration"] = duration
-                buff["amount"] = amount  # Optional: update amount
+                buff["amount"] = amount
                 return
-
-        # Otherwise, add new buff
         self.active_buffs.append({
             "name": name,
             "stat": stat,
@@ -189,8 +182,9 @@ class BuffTracker:
         totals = {}
         for buff in self.active_buffs:
             totals[buff["stat"]] = totals.get(buff["stat"], 0) + buff["amount"]
-        return totals
 
+        return totals
+        
     def get_uptime(self, buff_name, fight_length):
         """
         Return the uptime percentage of a buff over the fight.
@@ -234,7 +228,7 @@ class DeepWounds:
 # -------------------------
 # Single fight simulation
 # -------------------------
-def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
+def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit,
                       min_dmg, max_dmg, oh_min_dmg, oh_max_dmg,
                       dual_wield,battering_ram, ambi_ME,skull_cracker, fight_length, armor, armor_penetration, haste, wf, tank_dummy, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15,
                       mob_level=63, multi=1.0,
@@ -261,6 +255,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
     impwield = 1.25
     Starting_rage=0.0
     base_crit=crit
+    base_crit-=agility/20/100
     
     mob_level=mob_level or 63
     if armor is None:
@@ -416,45 +411,6 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
     def handle_procs(triggered, time):
         dmg=0.0
         for proc in triggered:
-            # Buff-type procs
-            if "str_buff" in proc:
-                onhit_buffs.add_buff(
-                    proc["name"],
-                    "strength",
-                    proc["str_buff"],
-                    proc["duration"],
-                    time
-                )
-
-            if "ap_buff" in proc:
-                onhit_buffs.add_buff(
-                    proc["name"],
-                    "ap",
-                    proc["ap_buff"],
-                    proc["duration"],
-                    time
-                )
-
-            if "haste_buff" in proc:
-                onhit_buffs.add_buff(
-                    proc["name"],
-                    "haste",
-                    proc["haste_buff"],
-                    proc["duration"],
-                    time
-                )    
-
-            if "crit_buff" in proc:
-                onhit_buffs.add_buff(
-                    proc["name"], "crit", 
-                    proc["crit_buff"], 
-                    proc["duration"], time
-                )
-
-
-            if "haste_buff" in proc:
-                onhit_buffs.add_buff(proc["name"], "haste", proc["haste_buff"], proc["duration"], time) 
-
             # Instant extra MH swing procs (Flurry Axe, Wound, Rend)
             if proc.get("mh_extra_hit"):
                 queue.put((time, next_id(), "Extra_Attack", True))
@@ -469,7 +425,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
                 if random.random()<crit:
                     deep_wounds.trigger(time, mh_base_avg)
                     dmg*=2
-                
+          
 
 
         return dmg * multi
@@ -533,26 +489,27 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
         active_mods = onhit_buffs.update(time)
        # STR -> AP convertion with buffs before event
         crit=base_crit
+        crit += active_mods.get("crit", 0.0)
         if kings and str_earth:
-            current_total_ap = total_ap*1.1 + (active_mods.get("strength", 0)+88) * 2*1.1*1.2 + active_mods.get("ap", 0)
-            crit+=(88/20/100)
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88 )* 2*1.1
+            crit+=((agility+88)*1.1/20/100)
         elif kings:
-            current_total_ap = total_ap*1.1 + (active_mods.get("strength", 0)) * 2*1.2*1.1 + active_mods.get("ap", 0)
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0) )* 2*1.1
+            crit+=((agility)/20/100)
         elif str_earth:
-            current_total_ap = total_ap + (active_mods.get("strength", 0)+88) * 2*1.2 + active_mods.get("ap", 0)
-            crit+=(88/20/100)
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88 )* 2
+            crit+=((agility+88)/20/100)
 
         else:
-            current_total_ap = total_ap + active_mods.get("strength", 0) * 2*1.2 + active_mods.get("ap", 0)
-        if shamanistic_rage: current_total_ap*=1.1   
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0) )* 2
+            crit+=((agility)/20/100)
 
-        
+        if shamanistic_rage: current_total_ap*=1.1
+ 
         #Calc haste before event
         proced_haste=haste + active_mods.get("haste", 0)
         current_haste = FLURRY_MULT*proced_haste*wf if flurry_hits_remaining > 0 else (proced_haste * wf)
         current_haste *= bloodlust.get_multiplier()
-        crit = base_crit + active_mods.get("crit", 0.0)
-        print(active_mods.get("crit", 0.0))
 
         # Mh base dmg each start for wounds calc
       
@@ -987,7 +944,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, crit, hit,
         ],
         "flurry_uptime": flurry_time / fight_length,
         "enrage_uptime": enrage.total_uptime / fight_length,
-        "total_dps": (total_damage + deep_wounds.total_damage) / fight_length,
+        "total_dps": (total_damage + deep_wounds.total_damage+rend_bleed.total_damage) / fight_length,
         "deep_wounds_dps": deep_wounds.total_damage / fight_length,
         "crusader_uptime": crusader_uptime,
         "crusader_oh_uptime": crusader_oh_uptime,
@@ -1108,10 +1065,12 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     if stats is None:
         stats = {}
     strength = stats.get("strength", 0)
+    agility = stats.get("Agility", 121)
     attack_power = stats.get("attack_power", 2800)
     crit = stats.get("crit", 31)/100 - 0.048
     hit = stats.get("hit", 8)/100
-    armor = stats.get("Boss_armor", 4644)
+    your_armor=stats.get("Your_Armor", 4000)
+    armor = stats.get("boss_armor", 4644)
     armor_penetration = stats.get("armor_penetration", 10)/5/100
     min_dmg = stats.get("min_dmg", 96)
     max_dmg = stats.get("max_dmg", 152)
@@ -1120,11 +1079,15 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     haste =stats.get("haste",0)
     wf =stats.get("wf",0)
     haste = 1 + haste / 1000  # 10 -> 0.01 -> 1.01
-    wf = 1 + wf / 1000 
+    wf = 1 + wf / 1000
+    ap_from_armor=your_armor/102*3
     all_attack_counts = []
+    base_ap=60*3-20
     
-    total_ap = attack_power + strength*1.2*2
-
+    #Calculate Base stats from Char sheet input, needed for buff interaction
+    Gear_AP=attack_power - base_ap - strength * 2 - ap_from_armor
+    
+    total_ap = Gear_AP  + ap_from_armor + base_ap
 
     # Lists to collect per-fight values
     results_total = []
@@ -1152,6 +1115,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         fight = _run_single_fight(
             mh_speed=mh_speed,
             oh_speed=oh_speed,
+            strength=strength,
+            agility=agility,
             total_ap=total_ap,
             crit=crit,
             hit=hit,
