@@ -78,31 +78,85 @@ class RendBleed:
         if not self.tick_times:
             self.active = False
 # -------------------------
-# Bloolust class
-# -------------------------
-class Bloodlust:
-    def __init__(self, duration=40.0, haste_bonus=0.3):  # e.g., 30% haste
+# Blood Fury class
+# ------------------------
+
+class Bloodfury:
+    def __init__(self, duration=15.0, ap_bonus=242, cooldown=120.0, onhit_buffs=None):
         self.duration = duration
-        self.haste_bonus = haste_bonus
+        self.ap_bonus = ap_bonus
+        self.cooldown = cooldown        # seconds
         self.active = False
         self.end_time = 0.0
+        self.uptime = 0.0
         self.last_update_time = 0.0
-        self.total_uptime = 0.0
+        self.last_trigger_time = -float('inf')  # tracks when it was last triggered
+        self.onhit_buffs = onhit_buffs
 
     def trigger(self, current_time):
         self.active = True
         self.end_time = current_time + self.duration
+        self.last_update_time = current_time
+
+
+        self.active = True
+        self.end_time = current_time + self.duration
+        self.last_trigger_time = current_time
+
+        if self.onhit_buffs is not None:
+            self.onhit_buffs.add_buff(
+                "Bloodfury",
+                "ap",
+                self.ap_bonus,
+                self.duration,
+                current_time,
+                ignore_if_active=False   # allow refresh after cooldown
+            )
+
 
     def update(self, current_time):
         if self.active:
             dt = current_time - self.last_update_time
-            self.total_uptime += dt
+            self.uptime += dt
             if current_time >= self.end_time:
                 self.active = False
         self.last_update_time = current_time
 
-    def get_multiplier(self):
-        return 1 + self.haste_bonus if self.active else 1.0
+    def get_bonus_ap(self):
+        return self.ap_bonus if self.active else 0
+
+
+# -------------------------
+# Bloolust class
+# -------------------------
+class Bloodlust:
+    def __init__(self, duration=40.0, haste_bonus=0.3, cooldown=600.0):
+        self.duration = duration
+        self.haste_bonus = haste_bonus
+        self.active = False
+        self.end_time = 0.0
+        self.uptime = 0.0
+        self.last_update_time = 0.0
+        self.next_available = 0.0
+        self.cooldown = cooldown
+
+    def trigger(self, current_time):
+        self.active = True
+        self.end_time = current_time + self.duration
+        self.last_update_time = current_time
+        self.next_available = current_time + self.cooldown
+
+
+    def update(self, current_time):
+        if self.active:
+            dt = current_time - self.last_update_time
+            self.uptime += dt
+            if current_time >= self.end_time:
+                self.active = False
+        self.last_update_time = current_time
+
+    def get_bonus_haste(self):
+        return self.haste_bonus if self.active else 0.0
 
 # -------------------------
 # Deathwish tracker class
@@ -146,6 +200,12 @@ class BuffTracker:
         self.last_update_time = 0.0
 
     def add_buff(self, name, stat, amount, duration, start_time, ignore_if_active=False):
+        """
+        Add a new buff or refresh an existing one.
+        If ignore_if_active is True, do not refresh an existing buff.
+        """
+        self.update(start_time)  # update uptime before changing buffs
+
         for buff in self.active_buffs:
             if buff["name"] == name:
                 if ignore_if_active:
@@ -154,6 +214,8 @@ class BuffTracker:
                 buff["duration"] = duration
                 buff["amount"] = amount
                 return
+
+        # Add new buff
         self.active_buffs.append({
             "name": name,
             "stat": stat,
@@ -164,11 +226,12 @@ class BuffTracker:
 
     def update(self, current_time):
         """
-        Update active buffs and calculate uptime.
+        Update active buffs, calculate uptime, and remove expired buffs.
+        Returns a dict of total stats from active buffs.
         """
         dt = current_time - self.last_update_time
+
         for buff in self.active_buffs:
-            # Only count time that the buff is active
             active_time = min(current_time, buff["start_time"] + buff["duration"]) - max(self.last_update_time, buff["start_time"])
             if active_time > 0:
                 self.uptime[buff["name"]] = self.uptime.get(buff["name"], 0) + active_time
@@ -184,15 +247,13 @@ class BuffTracker:
             totals[buff["stat"]] = totals.get(buff["stat"], 0) + buff["amount"]
 
         return totals
-        
+
     def get_uptime(self, buff_name, fight_length):
-        """
-        Return the uptime percentage of a buff over the fight.
-        """
+        if fight_length <= 0:
+                return 0.0
+        """Return the uptime percentage of a buff over the fight."""
         return self.uptime.get(buff_name, 0.0) / fight_length
 
-
-        
 
 
 # -------------------------
@@ -235,7 +296,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                       MH_procs=None,
                       OH_procs=None,
                       kings=False, str_earth=False, shamanistic_rage = False,bashguuder=False, faeri=False,sunders=False,outrage=False,icon=False,trauma=False,HoJ=False,
-                      bloodlust_time=10.0
+                      bloodlust_time=10.0, bloodfury_time=10,
                       ):
     time = 0.0
     total_damage = 0.0
@@ -290,7 +351,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     BT_COST = BT_COST
     BT_CD_UP = 0
     gcd = 1.5
-    gcd_delay = 0.01
+    gcd_delay = 0.05
     slam_proc = 0
     FLURRY_MULT = 1.25
     flurry_hits_remaining = 0
@@ -299,8 +360,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     proced_haste=0.0
     base_multi = multi
     multi_oh = multi
-
-    bloodlust = Bloodlust(duration=40.0, haste_bonus=0.3)  # 40s buff, 30% haste
+   
 
     # -------------------------
     #Damage Multis
@@ -324,6 +384,8 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     # -------------------------
     onhit_buffs = BuffTracker()
     death_wish = DeathWish()
+    bloodlust = Bloodlust(duration=40.0, haste_bonus=0.3)  # 40s buff, 30% haste
+    bloodfury = Bloodfury(duration=15.0, ap_bonus=242, onhit_buffs=onhit_buffs)
 
     # -------------------------
     # Attack tracking
@@ -396,8 +458,6 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     MH_PROCS = set(MH_procs)
     OH_PROCS = set(OH_procs)
     MH_EXTRA_PROCS = set(MH_procs)
-    MH_EXTRA_PROCS.discard("Flurry Axe")
-    MH_EXTRA_PROCS.discard("HoJ")
     if icon:
         MH_PROCS.add("icon")
         OH_PROCS.add("icon")
@@ -405,6 +465,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     if HoJ:
         MH_PROCS.add("HoJ")
         OH_PROCS.add("HoJ")
+        MH_EXTRA_PROCS.add("HoJ")
     # -------------------------
     # On hit proc handler def
     # -------------------------
@@ -413,7 +474,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         for proc in triggered:
             # Instant extra MH swing procs (Flurry Axe, Wound, Rend)
             if proc.get("mh_extra_hit"):
-                queue.put((time, next_id(), "Extra_Attack", True))
+                queue.put((time, next_id(), "Extra_Attack",{ "source_proc": proc["name"]}))
 
             if proc["name"] == "Rend Garg":
                 rend_bleed.trigger(time, current_total_ap, multi, trauma)
@@ -481,15 +542,25 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         rend_bleed.update(time)
 
         #Bloodlust
-        if time >= bloodlust_time and not bloodlust.active:
+        if time >= bloodlust_time and time >= bloodlust.next_available:
             bloodlust.trigger(time)
         bloodlust.update(time)
+
+        # Bloodfury activation
+        if time >= bloodfury_time and not bloodfury.active and (time - bloodfury.last_trigger_time >= bloodfury.cooldown): 
+            bloodfury.trigger(time)
+        # Update its state every event
+        bloodfury.update(time)
+
+
 
 
         active_mods = onhit_buffs.update(time)
        # STR -> AP convertion with buffs before event
         crit=base_crit
         crit += active_mods.get("crit", 0.0)
+        if bloodfury.active:
+            current_total_ap += bloodfury.get_bonus_ap()
         if kings and str_earth:
             current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88 )* 2*1.1
             crit+=((agility+88)*1.1/20/100)
@@ -504,12 +575,14 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             current_total_ap = total_ap + (strength + active_mods.get("strength", 0) )* 2
             crit+=((agility)/20/100)
 
+        if bloodfury.active:
+            current_total_ap += bloodfury.get_bonus_ap()
         if shamanistic_rage: current_total_ap*=1.1
  
         #Calc haste before event
         proced_haste=haste + active_mods.get("haste", 0)
         current_haste = FLURRY_MULT*proced_haste*wf if flurry_hits_remaining > 0 else (proced_haste * wf)
-        current_haste *= bloodlust.get_multiplier()
+        current_haste *= 1 + bloodlust.get_bonus_haste()
 
         # Mh base dmg each start for wounds calc
       
@@ -568,11 +641,12 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 next_time=time + swing_speed
                 if hs_crit: crit_counts["HS_CRIT"] += 1
                 if ambi_ME:
-                    ambi_dmg = random.randint(int(oh_min_dmg), int(oh_max_dmg)) + current_total_ap  / 14 * oh_speed
+                    ambi_dmg = random.randint(int(oh_min_dmg), int(oh_max_dmg)) + (current_total_ap  / 14 * oh_speed)
                     ambi_dmg*=multi_oh*0.75
+                    ambi_dmg *= (1 - DR)
                     ambi_crit = random.random() < crit
                     if ambi_crit: 
-                        ambi_dmg*=2.2
+                        ambi_dmg*=2
                         deep_wounds.trigger(time, oh_base_avg)
                         flurry_hits_remaining = 3
                     total_damage += ambi_dmg
@@ -617,7 +691,10 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             attack_counts["MH"] += 1
             if was_crit: crit_counts["MH_CRIT"] += 1
             if was_miss == 0:
-                procs = MH_EXTRA_PROCS
+                procs = MH_EXTRA_PROCS.copy()
+                payload = extra_attack if isinstance(extra_attack, dict) else {}
+                source_proc = payload.get("source_proc")
+                procs.discard(source_proc)
                 triggered = resolve_on_hit_procs(time,mh_speed, procs_to_check=procs)
                 apply_on_hit_procs(triggered, time, onhit_buffs, total_ap=total_ap)
                 proc_dmg = handle_procs(triggered, time) or 0.0
@@ -641,6 +718,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 continue
             dmg, was_crit, was_miss = _resolve_swing(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, dual_wield, armor, armor_penetration,
                                                      HS_queue, oh_speed, mob_level, multi=multi_oh)
+
             total_damage += dmg
             white_OH_damage += dmg
             attack_counts["OH"] += 1
@@ -680,7 +758,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             # Slam
             elif rage >= slam_COST and slam_proc==1:
                 slam_proc=0
-                dmg, crit_flag,proc_flag = _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed, mob_level=63, multi=multi)
+                dmg, crit_flag,proc_flag = _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed,False, mob_level=63, multi=multi)
                 #undending fury multi
                 dmg*=1.1
                 total_damage += dmg
@@ -712,13 +790,11 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     slam_proc=1
 
                 # Offhand Slam
-                dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed,mob_level=63, multi=multi_oh)
+                dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed, True,mob_level=63, multi=multi_oh)
                 #undending fury multi
                 dmg*=1.1
                 if proc_flag:
                     enrage.trigger(time)
-                #undending fury
-                dmg*=1.1
                 total_damage += dmg
                 slam_damage_OH += dmg
                 attack_counts["SLAM_OH"] += 1
@@ -823,7 +899,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             elif rage >= slam_COST:
                 slam_cast_time = 1.5
                 slam_lockout_until = time + slam_cast_time
-                dmg, crit_flag, proc_flag= _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed,mob_level=63, multi=multi)
+                dmg, crit_flag, proc_flag= _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed, False, mob_level=63, multi=multi)
                 #undending fury multi
                 dmg*=1.1           
                 total_damage += dmg
@@ -854,7 +930,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     slam_proc=1
         
                 # Offhand Slam
-                dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed,mob_level=63, multi=multi_oh)
+                dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed, True, mob_level=63, multi=multi_oh)
                 #undending fury multi
                 dmg*=1.1  
                 total_damage += dmg
@@ -996,7 +1072,7 @@ def _resolve_swing(min_dmg, max_dmg, current_total_ap, crit, hit, dual_wield, ar
     dmg *= multi
     return dmg, was_crit, was_miss
 
-def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_penetration, base_speed,
+def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_penetration, base_speed,oh=False,
                   mob_level=63, multi=1.0, forced_crit=None):
     """
     Resolves a slam, returns (damage, crit_flag, proc_flag)
@@ -1004,20 +1080,23 @@ def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_pe
     roll = random.random()
     MISS = max(0.08 - hit, 0)
     is_crit = forced_crit if forced_crit is not None else (roll < crit)
-    base_damage = random.randint(int(min_dmg), int(max_dmg)) + 87 + current_total_ap / 14 * base_speed
+    if oh:
+        base_damage = random.randint(int(min_dmg), int(max_dmg)) + 78 + current_total_ap / 14 * base_speed
+    else:
+        base_damage = random.randint(int(min_dmg), int(max_dmg)) + 87 + current_total_ap / 14 * base_speed
+
     DR = _calc_dr(armor, armor_penetration, mob_level)
     # Slam proc: 50% chance per slam
     proc_flag = random.random() < 0.5
 
     if roll < MISS:
         dmg = 0.0
-    else:
+    elif  forced_crit is not None or roll < crit + MISS:
     # On a hit, roll for crit
-        is_crit = forced_crit if forced_crit is not None else (random.random() < crit)
-        if is_crit:
-            dmg = base_damage * 2.2 * (1 - DR)
-        else:
-            dmg = base_damage * (1 - DR)
+        dmg = base_damage * 2.2 * (1 - DR)
+        is_crit= 1
+    else:
+        dmg = base_damage * (1 - DR)
 
     dmg *= multi
     return dmg, is_crit, proc_flag
@@ -1151,8 +1230,9 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
             HoJ=HoJ,
             MH_procs=stats.get("MH_procs"), 
             OH_procs=stats.get("OH_procs"),
-            bloodlust_time=stats.get("bloodlust_time", 10.0)
-        )
+            bloodlust_time=stats.get("bloodlust_time", 10.0),
+            bloodfury_time=stats.get("bloodfury_time", 10.0)
+    )
         results_total.append(fight["total_dps"])
         results_white_MH.append(fight["white_MH_dps"])
         results_white_OH.append(fight["white_OH_dps"])

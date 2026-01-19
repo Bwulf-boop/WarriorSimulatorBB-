@@ -46,16 +46,16 @@ class WarriorSimApp(tk.Tk):
         self.stats = {
             "strength": tk.DoubleVar(value=403),
             "Agility": tk.DoubleVar(value=121),
-            "attack_power": tk.DoubleVar(value=1155),
-            "crit": tk.DoubleVar(value=31.42),
+            "attack_power": tk.DoubleVar(value=1455),
+            "crit": tk.DoubleVar(value=30.42),
             "hit": tk.DoubleVar(value=8),
             "Your_Armor": tk.DoubleVar(value=4234),
             "Boss_armor": tk.DoubleVar(value=4644),
             "armor_penetration": tk.DoubleVar(value=78),
-            "min_dmg": tk.DoubleVar(value=106),
-            "max_dmg": tk.DoubleVar(value=165),
-            "oh_min_dmg": tk.DoubleVar(value=108),
-            "oh_max_dmg": tk.DoubleVar(value=165),
+            "min_dmg": tk.DoubleVar(value=97),
+            "max_dmg": tk.DoubleVar(value=157),
+            "oh_min_dmg": tk.DoubleVar(value=100),
+            "oh_max_dmg": tk.DoubleVar(value=157),
             "haste": tk.DoubleVar(value=0),
             "wf": tk.DoubleVar(value=0),
         }
@@ -85,6 +85,7 @@ class WarriorSimApp(tk.Tk):
         self.trauma = tk.BooleanVar(value=False)
         self.HoJ = tk.BooleanVar(value=False)
         self.bloodlust_time = tk.DoubleVar(value=61.0)
+        self.bloodfury_time = tk.DoubleVar(value=61.0)
 
 
         # Weapon Proc Options
@@ -133,8 +134,6 @@ class WarriorSimApp(tk.Tk):
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=2)
-        ttk.Label(row, text="Boss_Armor").pack(side="left")
-        ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
         ttk.Label(row, text="Damage Multiplier").pack(side="left")
         ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
         # ---------- Checkbox Grid ----------
@@ -197,6 +196,8 @@ class WarriorSimApp(tk.Tk):
         row.pack(fill="x", pady=2)
         ttk.Label(row, text="Bloodlust Time (s)").pack(side="left")
         ttk.Entry(row, textvariable=self.bloodlust_time, width=10).pack(side="left")
+        ttk.Label(row, text="Bloodfury Time (s)").pack(side="left")
+        ttk.Entry(row, textvariable=self.bloodfury_time, width=10).pack(side="left")
 
          # ---------- Main Hand Procs ----------
         mh_frame = ttk.LabelFrame(frame, text="Main Hand Procs")
@@ -269,6 +270,8 @@ class WarriorSimApp(tk.Tk):
             stats["trauma"] = self.trauma.get()
             stats["HoJ"] = self.HoJ.get()
             stats["bloodlust_time"] = self.bloodlust_time.get()
+            stats["bloodfury_time"] = self.bloodfury_time.get()
+
             result = run_simulation(
                 iterations=self.iterations.get(),
                 mh_speed=self.mh_speed.get(),
