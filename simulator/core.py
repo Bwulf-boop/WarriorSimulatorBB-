@@ -317,6 +317,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     Starting_rage=0.0
     base_crit=crit
     base_crit-=agility/20/100
+    current_total_ap = total_ap
     
     mob_level=mob_level or 63
     if armor is None:
@@ -336,6 +337,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         enrage_multi=1.1*1.05
     else:
         enrage_multi=1.1
+
 
 
 
@@ -486,8 +488,14 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 if random.random()<crit:
                     deep_wounds.trigger(time, mh_base_avg)
                     dmg*=2
+            
+            if proc.get("magic_based"):
+                dmg = proc.get("base_damage", 0) + current_total_ap * proc["ap_multiplier"] * proc.get("weapon_multiplier", 1.0)
+                dmg/= multi
+                dmg*=1.2475
+                if random.random()<crit:
+                    dmg*=1.5
           
-
 
         return dmg * multi
 
@@ -505,25 +513,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
 
     while not queue.empty():
         time, _, event, extra_attack = queue.get()
-        # -------------------------
-        # Set Damage Multi on each event
-        # -------------------------
-        multi = base_multi
-        if enrage.active:
-            multi *= enrage_multi
-
-        if death_wish.active:
-            multi *= 1.20
-        multi *= PVE_PWR
-        multi *= SMF
-        multi_oh = base_multi
-        multi_oh *= 0.5
-        if enrage.active:
-            multi_oh *= 1.10
-
-        if death_wish.active:
-            multi_oh*= 1.20
-        multi_oh*= impwield*PVE_PWR*SMF*ambidextrous.get_multiplier()
+        active_mods = onhit_buffs.update(time)
 
         # Update flurry,enrage, dw , ambi uptime
         delta = time - last_event_time
@@ -553,32 +543,26 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         bloodfury.update(time)
 
 
-
-
-        active_mods = onhit_buffs.update(time)
        # STR -> AP convertion with buffs before event
         crit=base_crit
         crit += active_mods.get("crit", 0.0)
         if bloodfury.active:
             current_total_ap += bloodfury.get_bonus_ap()
         if kings and str_earth:
-            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88 )* 2*1.1
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88*1.2 )* 2*1.1
             crit+=((agility+88)*1.1/20/100)
         elif kings:
             current_total_ap = total_ap + (strength + active_mods.get("strength", 0) )* 2*1.1
             crit+=((agility)/20/100)
         elif str_earth:
-            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88 )* 2
+            current_total_ap = total_ap + (strength + active_mods.get("strength", 0)+88*1.2 )* 2
             crit+=((agility+88)/20/100)
 
         else:
             current_total_ap = total_ap + (strength + active_mods.get("strength", 0) )* 2
             crit+=((agility)/20/100)
-
-        if bloodfury.active:
-            current_total_ap += bloodfury.get_bonus_ap()
+        
         if shamanistic_rage: current_total_ap*=1.1
- 
         #Calc haste before event
         proced_haste=haste + active_mods.get("haste", 0)
         current_haste = FLURRY_MULT*proced_haste*wf if flurry_hits_remaining > 0 else (proced_haste * wf)
@@ -595,7 +579,19 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         #Collects uptime for all on hit proc buffs
         buff_uptimes = {name: onhit_buffs.get_uptime(name, fight_length) for name in onhit_buffs.uptime.keys()}
 
-        
+        # -------------------------
+        # Set Damage Multi on each event
+        # -------------------------
+        multi = base_multi
+        if enrage.active:
+            multi *= enrage_multi
+        if death_wish.active:
+            multi *= 1.20
+        multi *= PVE_PWR
+        multi *= SMF
+        multi_oh = multi 
+        multi_oh*=0.5* impwield*ambidextrous.get_multiplier() #Ambi and OH penalty
+    
 
 
         # Queue HS if enough rage
@@ -611,6 +607,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 flurry_hits_remaining -= 1
             if time < slam_lockout_until:
                 queue.put((slam_lockout_until, next_id(), event, False))
+
                 continue
             if HS_queue == 1 and not extra_attack and rage>= HS_COST:
                 HS_queue = 0
@@ -731,7 +728,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 proc_dmg = handle_procs(triggered, time) or 0.0
                 proc_damage_count+=proc_dmg
                 total_damage += proc_dmg
-            else: miss_counts["MH_MISS"] += 1
+            else: miss_counts["OH_MISS"] += 1
 
             rage += _generate_rage_classic(dmg, oh_speed, offhand=True, is_crit=was_crit)
             if rage > 100.0: rage = 100.0
@@ -753,8 +750,6 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             if not used_gcd and death_wish.can_cast(time) and rage>=DW_COST:
                 death_wish.cast(time)
                 used_gcd = True 
-
-
             # Slam
             elif rage >= slam_COST and slam_proc==1:
                 slam_proc=0
@@ -969,7 +964,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     if next_time <= fight_length:
                         queue.put((next_time, next_id(), "GCD",False))
             else:
-                next_time = time+0.05
+                next_time = time+0.02
                 if next_time <= fight_length:
                     queue.put((next_time, next_id(), "GCD", False))
 
@@ -1103,7 +1098,7 @@ def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_pe
 
 
 def _calc_dr(armor, armor_penetration, mob_level):
-    DR = armor / (armor + 7285)
+    DR = armor / (armor + 5882.5)
     DR = min(DR, 0.75)
     return DR * (1 - min(armor_penetration, 1.0))
 
@@ -1162,12 +1157,20 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     ap_from_armor=your_armor/102*3
     all_attack_counts = []
     base_ap=60*3-20
+    extra_str = stats.get("Add_Str", 0)
+    extra_agi = stats.get("Add_Agi", 0)
+    extra_ap = stats.get("Add_Ap", 0)
+    extra_crit = stats.get("Add_Crit", 0)/100
     
     #Calculate Base stats from Char sheet input, needed for buff interaction
     Gear_AP=attack_power - base_ap - strength * 2 - ap_from_armor
-    
-    total_ap = Gear_AP  + ap_from_armor + base_ap
 
+    
+    total_ap = Gear_AP  + ap_from_armor + base_ap + extra_ap
+
+    strength += extra_str*1.2
+    agility = agility + extra_agi
+    crit = crit + extra_crit
     # Lists to collect per-fight values
     results_total = []
     results_white_MH = []

@@ -30,7 +30,7 @@ ALL_PROCS = {
     "Wound": {
         "chance": 1.5,           #1.5 ppm
         "ap_based": True,          # flag to scale with AP
-        "ap_multiplier": 0.365,    # 36.5% of your total AP
+        "ap_multiplier": 0.36,    # 36.5% of your total AP
         "base_damage": 22,          # Base damage
         "weapon_multiplier": 1.0,
         "ignore_if_active": False   # optional: scale differently for MH/OH
@@ -58,8 +58,16 @@ ALL_PROCS = {
         "mh_extra_hit": True,
         "ignore_if_active" : False
             # This triggers one extra MH swing
-        }
+        },
+    "DB": {
+        "chance": 1.5,           #1.5 ppm
+        "magic_based": True,          # flag for magic dmg
+        "ap_multiplier": 0.24,      # 0.24% of your total AP
+        "base_damage": 154,          # Base damage
+        "weapon_multiplier": 1.0,
+        "ignore_if_active": False   # optional: scale differently for MH/OH
     }
+}
 
 
 # -------------------------

@@ -50,7 +50,7 @@ class WarriorSimApp(tk.Tk):
             "crit": tk.DoubleVar(value=30.42),
             "hit": tk.DoubleVar(value=8),
             "Your_Armor": tk.DoubleVar(value=4234),
-            "Boss_armor": tk.DoubleVar(value=4644),
+            "boss_armor": tk.DoubleVar(value=3758),
             "armor_penetration": tk.DoubleVar(value=78),
             "min_dmg": tk.DoubleVar(value=97),
             "max_dmg": tk.DoubleVar(value=157),
@@ -58,6 +58,11 @@ class WarriorSimApp(tk.Tk):
             "oh_max_dmg": tk.DoubleVar(value=157),
             "haste": tk.DoubleVar(value=0),
             "wf": tk.DoubleVar(value=0),
+            "Add_Str": tk.DoubleVar(value=0),
+            "Add_AP": tk.DoubleVar(value=0),
+            "Add_Agi": tk.DoubleVar(value=0),
+            "Add_Crit": tk.DoubleVar(value=0),
+
         }
         # Add new cost variables
         self.BT_cost = tk.DoubleVar(value=20.0)
@@ -89,7 +94,7 @@ class WarriorSimApp(tk.Tk):
 
 
         # Weapon Proc Options
-        self.MH_PROC_OPTIONS = ["Crusader", "Flurry Axe", "Empyrian Demolisher", "Wound"]
+        self.MH_PROC_OPTIONS = ["Crusader", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB"]
         self.OH_PROC_OPTIONS = ["Crusader_OH","Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound"]
 
         # Track checkbox selections
@@ -215,6 +220,7 @@ class WarriorSimApp(tk.Tk):
     # ---------- Results Labels ----------
     def _create_results(self, frame):
         parent = self.results_frame
+        self.prev_mean_label = ttk.Label(parent, text="Previous DPS: -")
         self.mean_label = ttk.Label(parent, text="Mean DPS: -")
         self.white_MH_label = ttk.Label(parent, text="White MH DPS: -")
         self.white_OH_label = ttk.Label(parent, text="White OH DPS: -")
@@ -244,7 +250,7 @@ class WarriorSimApp(tk.Tk):
         self.avg_OH_label = ttk.Label(parent, text="Avg OH Damage:")
         self.avg_OH_value = ttk.Label(parent, textvariable=self.avg_oh_var)
 
-        for lbl in [self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
+        for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
                     self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
                     self.dw_label, self.rend_label,self.dmg_proc_label,
@@ -301,12 +307,17 @@ class WarriorSimApp(tk.Tk):
             )
             self._show_results(result)
             self.last_result = result
+            # Save previous result if it exists
+            if hasattr(self, "last_result"):
+                self.prev_result = self.last_result
+                self.last_result = result
 
             
         except Exception as e:
             messagebox.showerror("Error", str(e))
         finally:
             self.run_button.config(state="normal")
+            
 
     def _show_results(self, result):
         self.mean_label.config(text=f"Mean DPS: {result['mean_total_dps']:.1f}")
@@ -328,7 +339,13 @@ class WarriorSimApp(tk.Tk):
         self.dw_label.config(text=f"Deep Wounds DPS: {result.get('Deep Wounds DPS', 0):.1f}")
         self.dwish_label.config(text=f"Death Wish uptime: {result['avg_death_wish_uptime']*100:.1f}%")
         self.rend_label.config(text=f"Rend Garg DPS: {result.get('mean_Rend_dps', 0):.1f}")                             
-        self.dmg_proc_label.config(text=f"DMG Proc DPS: {result.get('mean_proc_dmg_dps', 0):.1f}")                             
+        self.dmg_proc_label.config(text=f"DMG Proc DPS: {result.get('mean_proc_dmg_dps', 0):.1f}")
+        if hasattr(self, "prev_result"):
+            self.prev_mean_label.config(
+            text=f"Previous DPS: {self.prev_result['mean_total_dps']:.1f}"
+            )
+        else:
+            self.prev_mean_label.config(text="Previous DPS: -")                            
         
 
 
