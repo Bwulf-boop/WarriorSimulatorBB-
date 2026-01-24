@@ -295,7 +295,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                       mob_level=63, multi=1.0,
                       MH_procs=None,
                       OH_procs=None,
-                      kings=False, str_earth=False, shamanistic_rage = False,bashguuder=False, faeri=False,sunders=False,outrage=False,icon=False,trauma=False,HoJ=False,
+                      kings=False, str_earth=False, shamanistic_rage = False,bashguuder=False, faeri=False,sunders=False,outrage=False,icon=False,trauma=False,HoJ=False, maelstrom=False,
                       bloodlust_time=10.0, bloodfury_time=10,
                       ):
     time = 0.0
@@ -318,6 +318,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     base_crit=crit
     base_crit-=agility/20/100
     current_total_ap = total_ap
+
     
     mob_level=mob_level or 63
     if armor is None:
@@ -360,6 +361,8 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     flurry_time = 0.0
     last_event_time = 0.0
     proced_haste=0.0
+    undending_fury=1.1
+    imp_ww=1.2
     base_multi = multi
     multi_oh = multi
    
@@ -460,6 +463,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
     MH_PROCS = set(MH_procs)
     OH_PROCS = set(OH_procs)
     MH_EXTRA_PROCS = set(MH_procs)
+    sunder_procs = set(MH_procs)
     if icon:
         MH_PROCS.add("icon")
         OH_PROCS.add("icon")
@@ -468,6 +472,10 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
         MH_PROCS.add("HoJ")
         OH_PROCS.add("HoJ")
         MH_EXTRA_PROCS.add("HoJ")
+    if maelstrom:
+        MH_PROCS.add("Maelstrom")
+        OH_PROCS.add("Maelstrom")
+        MH_EXTRA_PROCS.add("Maelstrom")
     # -------------------------
     # On hit proc handler def
     # -------------------------
@@ -755,7 +763,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 slam_proc=0
                 dmg, crit_flag,proc_flag = _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed,False, mob_level=63, multi=multi)
                 #undending fury multi
-                dmg*=1.1
+                dmg*=undending_fury
                 total_damage += dmg
                 slam_damage_MH += dmg
                 attack_counts["SLAM_MH"] += 1
@@ -772,7 +780,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     proc_damage_count+=proc_dmg  # calculate total proc damage
                     total_damage += proc_dmg
                 if was_miss == 0 and battering_ram:
-                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=MH_PROCS)  # get triggered procs
+                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=sunder_procs)  # get triggered procs
                     proc_dmg  = apply_on_hit_procs(triggered, time, onhit_buffs, total_ap=total_ap)  or 0.0  # calculate proc damage
                     handle_procs(triggered, time)  # apply buffs like Crusader
                     proc_damage_count+=proc_dmg
@@ -787,7 +795,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 # Offhand Slam
                 dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed, True,mob_level=63, multi=multi_oh)
                 #undending fury multi
-                dmg*=1.1
+                dmg*=undending_fury
                 if proc_flag:
                     enrage.trigger(time)
                 total_damage += dmg
@@ -800,7 +808,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     proc_damage_count+=proc_dmg  # calculate proc damage
                     total_damage += proc_dmg 
                 if was_miss == 0 and battering_ram:
-                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=MH_PROCS)  # get triggered procs
+                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=sunder_procs)  # get triggered procs
                     apply_on_hit_procs(triggered, time, onhit_buffs, total_ap=total_ap)
                     proc_dmg = handle_procs(triggered, time) or 0.0
                     total_damage += proc_dmg
@@ -826,7 +834,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 DR = _calc_dr(armor, armor_penetration, mob_level)
                 dmg = bt_base * (1 - DR) * multi
                 #undending fury
-                dmg*=1.1
+                dmg*=undending_fury
                 crit_flag = random.random() < crit
                 if crit_flag:
                     dmg *= 2.2
@@ -849,8 +857,10 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
             elif rage >= ww_COST and time >= WW_CD_UP:
                 ww_base = random.randint(int(min_dmg), int(max_dmg)) + current_total_ap  / 14 * 2.4
                 DR = _calc_dr(armor, armor_penetration, mob_level)
+
                 #undending fury multi
-                ww_base*=1.1                
+                ww_base*=undending_fury
+                ww_base*=imp_ww
                 dmg = ww_base * (1 - DR) * multi
 
                 crit_flag = random.random() < crit
@@ -862,7 +872,8 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
 
                 ww_base = random.randint(int(oh_min_dmg), int(oh_max_dmg)) + current_total_ap  / 14 * 2.4
                 #undending fury multi
-                ww_base*=1.1
+                ww_base*=undending_fury
+                ww_base*=imp_ww
                 dmg += ww_base * (1 - DR) * multi_oh
                 crit_flag = random.random() < crit
                 if crit_flag:
@@ -896,7 +907,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 slam_lockout_until = time + slam_cast_time
                 dmg, crit_flag, proc_flag= _resolve_slam(min_dmg, max_dmg, current_total_ap , crit, hit, armor, armor_penetration, mh_speed, False, mob_level=63, multi=multi)
                 #undending fury multi
-                dmg*=1.1           
+                dmg*=undending_fury        
                 total_damage += dmg
                 slam_damage_MH += dmg
                 if proc_flag:
@@ -909,7 +920,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     total_damage += proc_dmg
                     proc_damage_count +=proc_dmg
                 if was_miss == 0 and battering_ram:
-                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=MH_PROCS)  # get triggered procs
+                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=sunder_procs)  # get triggered procs
                     apply_on_hit_procs(triggered, time, onhit_buffs, total_ap=total_ap)
                     proc_dmg = handle_procs(triggered, time) or 0.0
                     total_damage += proc_dmg
@@ -927,7 +938,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                 # Offhand Slam
                 dmg, crit_flag, proc_flag = _resolve_slam(oh_min_dmg, oh_max_dmg, current_total_ap , crit, hit, armor, armor_penetration, oh_speed, True, mob_level=63, multi=multi_oh)
                 #undending fury multi
-                dmg*=1.1  
+                dmg*=undending_fury
                 total_damage += dmg
                 slam_damage_OH += dmg
 
@@ -941,7 +952,7 @@ def _run_single_fight(mh_speed, oh_speed, total_ap, strength, agility, crit, hit
                     total_damage += proc_dmg
                     proc_damage_count +=proc_dmg
                 if was_miss == 0 and battering_ram:
-                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=MH_PROCS)  # get triggered procs
+                    triggered = resolve_on_hit_procs(time, mh_speed, procs_to_check=sunder_procs)  # get triggered procs
                     apply_on_hit_procs(triggered, time, onhit_buffs, total_ap=total_ap)
                     proc_dmg = handle_procs(triggered, time) or 0.0
                     total_damage += proc_dmg 
@@ -1104,7 +1115,7 @@ def _calc_dr(armor, armor_penetration, mob_level):
 
 def _generate_rage_classic(damage, weapon_speed, offhand=False, is_crit=False):
     c = 230.6
-    f = 4 if offhand and is_crit else 2 if offhand else 14 if is_crit else 7
+    f = 6 if offhand and is_crit else 3 if offhand else 14 if is_crit else 7
     rage = (15 * damage) / (4 * c) + (f * weapon_speed) / 2
     max_rage = (15 * damage) / c
     if damage == 0:
@@ -1130,7 +1141,7 @@ def trigger_extra_mh_swing(queue, time, next_id):
 def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    fight_length=60.0, stats=None, dual_wield=True, battering_ram = True, ambi_ME=True, skull_cracker=True, tank_dummy = False,
                    kings=False, str_earth=False,shamanistic_rage=False, outrage=False,
-                   bashguuder=False, faeri=False,sunders=False, icon=False,trauma=False,HoJ=False,
+                   bashguuder=False, faeri=False,sunders=False, icon=False,trauma=False,HoJ=False, maelstrom=False,
                    multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0):
     """
     Run multiple iterations of the warrior simulation.
@@ -1231,6 +1242,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
             icon=icon,       
             trauma=trauma,
             HoJ=HoJ,
+            maelstrom=maelstrom,
             MH_procs=stats.get("MH_procs"), 
             OH_procs=stats.get("OH_procs"),
             bloodlust_time=stats.get("bloodlust_time", 10.0),

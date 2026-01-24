@@ -66,8 +66,16 @@ ALL_PROCS = {
         "base_damage": 154,          # Base damage
         "weapon_multiplier": 1.0,
         "ignore_if_active": False   # optional: scale differently for MH/OH
+    },
+        "Maelstrom": {
+        "chance": 1.5,           #1.5 ppm
+        "magic_based": True,          # flag for magic dmg
+        "ap_multiplier": 0.15,      # 0.24% of your total AP
+        "base_damage": 250,          # Base damage
+        "weapon_multiplier": 1.0,
+        "ignore_if_active": False   # optional: scale differently for MH/OH
+        }
     }
-}
 
 
 # -------------------------

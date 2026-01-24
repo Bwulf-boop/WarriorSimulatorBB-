@@ -89,13 +89,14 @@ class WarriorSimApp(tk.Tk):
         self.icon = tk.BooleanVar(value=False)
         self.trauma = tk.BooleanVar(value=False)
         self.HoJ = tk.BooleanVar(value=False)
+        self.maelstrom = tk.BooleanVar(value=False)
         self.bloodlust_time = tk.DoubleVar(value=61.0)
         self.bloodfury_time = tk.DoubleVar(value=61.0)
 
 
         # Weapon Proc Options
         self.MH_PROC_OPTIONS = ["Crusader", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH","Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound"]
+        self.OH_PROC_OPTIONS = ["Crusader_OH","Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -174,6 +175,8 @@ class WarriorSimApp(tk.Tk):
             .grid(row=2, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="HoJ", variable=self.HoJ)\
             .grid(row=3, column=2, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Maelstrom", variable=self.maelstrom)\
+            .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
         
 
         
@@ -275,8 +278,9 @@ class WarriorSimApp(tk.Tk):
             stats["icon"] = self.icon.get()
             stats["trauma"] = self.trauma.get()
             stats["HoJ"] = self.HoJ.get()
+            stats["Maelstrom"] = self.maelstrom.get()
             stats["bloodlust_time"] = self.bloodlust_time.get()
-            stats["bloodfury_time"] = self.bloodfury_time.get()
+    
 
             result = run_simulation(
                 iterations=self.iterations.get(),
@@ -299,6 +303,7 @@ class WarriorSimApp(tk.Tk):
                 icon = self.icon.get(),
                 trauma = self.trauma.get(),
                 HoJ = self.HoJ.get(),
+                maelstrom = self.maelstrom.get(),
                 outrage = self.outrage.get(),
                 BT_COST=self.BT_cost.get(),
                 slam_COST=self.slam_cost.get(),
