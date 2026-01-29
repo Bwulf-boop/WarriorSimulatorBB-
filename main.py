@@ -1,8 +1,9 @@
 from gui.app import WarriorSimApp  # import the Tkinter GUI
 
 if __name__ == "__main__":
-    # Create the app instance
+    import multiprocessing as mp
+    mp.freeze_support()   # REQUIRED on Windows
+
     app = WarriorSimApp()
-    
-    # Start the Tkinter event loop
     app.mainloop()
+

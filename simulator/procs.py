@@ -5,14 +5,26 @@ import random
 # -------------------------
 ALL_PROCS = {
     "Crusader": {
-        "chance": 0.8,       # 1 ppm chance per melee hit
-        "str_buff": 110,      # +120 Strength
+        "chance": 1,       # 1 ppm chance per melee hit
+        "str_buff": 100,      # 
         "duration": 15.0,
         "ignore_if_active" :False
     },
     "Crusader_OH": {
-        "chance": 0.8,       # 1 ppm chance per melee hit
-        "str_buff": 110,      # +120 Strength
+        "chance": 1,      # 1 ppm chance per melee hit
+        "str_buff": 100,     
+        "duration": 15.0,
+        "ignore_if_active": False
+    },
+    "Brutal_OH": {
+        "chance": 0.9,       # 1 ppm chance per melee hit
+        "str_buff": 110,     
+        "duration": 15.0,
+        "ignore_if_active": False
+    },
+    "Brutal": {
+        "chance": 0.9,       # 0.9 ppm chance per melee hit
+        "str_buff": 110,      
         "duration": 15.0,
         "ignore_if_active": False
     },
@@ -36,7 +48,7 @@ ALL_PROCS = {
         "ignore_if_active": False   # optional: scale differently for MH/OH
     },
     "Rend Garg": {
-        "chance": 2,          # 1 ppm
+        "chance": 1.5,          # 1 ppm
         "bleed": True,            # flag to handle in fight loop
         "duration": 30,         # optional, for reference
         "tick_interval": 3.0,
@@ -51,7 +63,6 @@ ALL_PROCS = {
         "cooldown": 45.0,
         "ignore_if_active" : True
     },
-    # Add more procs here as needed 
     "HoJ": {
         "flat_chance": True,
         "chance": 0.02,   # 2% per main-hand hit
@@ -64,16 +75,16 @@ ALL_PROCS = {
         "magic_based": True,          # flag for magic dmg
         "ap_multiplier": 0.24,      # 0.24% of your total AP
         "base_damage": 154,          # Base damage
-        "weapon_multiplier": 1.0,
-        "ignore_if_active": False   # optional: scale differently for MH/OH
+        "weapon_multiplier": 1.0,   # optional: scale differently for MH/OH
+        "ignore_if_active": False   
     },
-        "Maelstrom": {
+    "Maelstrom": {
         "chance": 1.5,           #1.5 ppm
         "magic_based": True,          # flag for magic dmg
-        "ap_multiplier": 0.15,      # 0.24% of your total AP
+        "ap_multiplier": 0.15,      # 0.15% of your total AP
         "base_damage": 250,          # Base damage
-        "weapon_multiplier": 1.0,
-        "ignore_if_active": False   # optional: scale differently for MH/OH
+        "weapon_multiplier": 1.0,   # optional: scale differently for MH/OH
+        "ignore_if_active": False   
         }
     }
 
@@ -117,14 +128,14 @@ def resolve_on_hit_procs(time, weapon_speed, procs_to_check=None, cooldowns=None
 
 
 
-def apply_on_hit_procs(triggered_procs, time, onhit_buffs, total_ap=None):
+def apply_on_hit_procs(triggered_procs, time, onhit_buffs):
     for proc in triggered_procs:
         if "str_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "strength", proc["str_buff"], proc["duration"], time, ignore_if_active=True)
+            onhit_buffs.add_buff(proc["name"], "strength", proc["str_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
         if "ap_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "ap", proc["ap_buff"], proc["duration"], time, ignore_if_active=True)
+            onhit_buffs.add_buff(proc["name"], "ap", proc["ap_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
         if "haste_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "haste", proc["haste_buff"], proc["duration"], time, ignore_if_active=True)
+            onhit_buffs.add_buff(proc["name"], "haste", proc["haste_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
         if "crit_buff" in proc:
             buff_name = "icon crit" if proc["name"] == "icon" else proc["name"]
             onhit_buffs.add_buff(
@@ -132,9 +143,6 @@ def apply_on_hit_procs(triggered_procs, time, onhit_buffs, total_ap=None):
                 "crit",             # Stat
                 proc["crit_buff"],  # Amount
                 proc["duration"],   # Duration
-                time    ,            # Start time
+                time,               # Start time
                 ignore_if_active=proc.get("ignore_if_active", False)
             )
-
-    return 
-            
