@@ -40,7 +40,7 @@ ALL_PROCS = {
         "ignore_if_active": False  # This triggers one extra MH swing
     },
     "Wound": {
-        "chance": 1.5,           #1.5 ppm
+        "chance": 2,           #
         "ap_based": True,          # flag to scale with AP
         "ap_multiplier": 0.36,    # 36.5% of your total AP
         "base_damage": 22,          # Base damage
@@ -85,7 +85,21 @@ ALL_PROCS = {
         "base_damage": 250,          # Base damage
         "weapon_multiplier": 1.0,   # optional: scale differently for MH/OH
         "ignore_if_active": False   
-        }
+        },
+
+    "Ironfoe": {
+        "chance": 0.5,   # 
+        "Ironfoe": True,
+        "ignore_if_active": False  # This triggers one extra MH swing
+    },
+    "Blood Talon": {
+        "chance": 1,          # 1 ppm
+        "bleed": True,            # flag to handle in fight loop
+        "duration": 12,           #
+        "tick_interval": 2.0,
+        "ignore_if_active" : False      # optional, for reference
+    }
+
     }
 
 

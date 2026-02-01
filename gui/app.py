@@ -44,20 +44,20 @@ class WarriorSimApp(tk.Tk):
 
         # ---------- Variables ----------
         self.stats = {
-            "strength": tk.DoubleVar(value=403),
+            "strength": tk.DoubleVar(value=433),
             "Agility": tk.DoubleVar(value=121),
-            "attack_power": tk.DoubleVar(value=1455),
-            "crit": tk.DoubleVar(value=30.42),
+            "attack_power": tk.DoubleVar(value=1515),
+            "crit": tk.DoubleVar(value=30.1),
             "hit": tk.DoubleVar(value=8),
             "Your_Armor": tk.DoubleVar(value=4234),
             "boss_armor": tk.DoubleVar(value=3758),
-            "armor_penetration": tk.DoubleVar(value=78),
+            "armor_penetration": tk.DoubleVar(value=57),
             "min_dmg": tk.DoubleVar(value=97),
             "max_dmg": tk.DoubleVar(value=157),
             "oh_min_dmg": tk.DoubleVar(value=100),
             "oh_max_dmg": tk.DoubleVar(value=157),
-            "haste": tk.DoubleVar(value=0),
-            "wf": tk.DoubleVar(value=0),
+            "haste": tk.DoubleVar(value=17),
+            "wf": tk.DoubleVar(value=200),
             "Add_Str": tk.DoubleVar(value=0),
             "Add_AP": tk.DoubleVar(value=0),
             "Add_Agi": tk.DoubleVar(value=0),
@@ -92,11 +92,19 @@ class WarriorSimApp(tk.Tk):
         self.maelstrom = tk.BooleanVar(value=False)
         self.bloodlust_time = tk.DoubleVar(value=61.0)
         self.bloodfury_time = tk.DoubleVar(value=61.0)
+        self.smf = tk.BooleanVar(value=False)
+        self.tg = tk.BooleanVar(value=False)
+        self.hunting_pack = tk.BooleanVar(value=False)
+        self.retri_crit = tk.BooleanVar(value=False)
+        self.starting_rage = tk.DoubleVar(value=50.0)
+        self.dragon_roar = tk.BooleanVar(value=False)
+        self.dragon_warrior = tk.BooleanVar(value=False)
+        self.ability_priority_var = tk.StringVar(value="DW, DR, SLAM_PROC, BT, WW, SLAM_HARD")
 
 
         # Weapon Proc Options
-        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB"]
+        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe"]
+        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -154,8 +162,12 @@ class WarriorSimApp(tk.Tk):
             .grid(row=2, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Ambi ME", variable=self.ambi_ME)\
             .grid(row=3, column=0, sticky="w", pady=2)
-        ttk.Checkbutton(checkbox_frame, text="Skull Cracker", variable=self.skull_cracker)\
+        ttk.Checkbutton(checkbox_frame, text="Dragon Roar", variable=self.dragon_roar)\
             .grid(row=4, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Dragon Warrior", variable=self.dragon_warrior)\
+            .grid(row=5, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Skull Cracker", variable=self.skull_cracker)\
+            .grid(row=6, column=0, sticky="w", pady=2)
         
         ttk.Checkbutton(checkbox_frame, text="Kings", variable=self.kings)\
             .grid(row=0, column=1, sticky="w", pady=2, padx=(20, 0))
@@ -177,12 +189,20 @@ class WarriorSimApp(tk.Tk):
             .grid(row=3, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Maelstrom", variable=self.maelstrom)\
             .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="SMF", variable=self.smf)\
+            .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="TG", variable=self.tg)\
+            .grid(row=5, column=2, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Hunting Pack", variable=self.hunting_pack)\
+            .grid(row=7, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
+            .grid(row=6, column=1, sticky="w", pady=2, padx=(20, 0))
         
 
         
 
         ttk.Checkbutton(checkbox_frame, text="Tank dummy", variable=self.tank_dummy)\
-            .grid(row=5, column=0, sticky="w", pady=2)
+            .grid(row=7, column=0, sticky="w", pady=2)
         
         self.run_button = ttk.Button(frame, text="Run Simulation", command=self._run_simulation_thread)
         self.run_button.pack(pady=10)
@@ -199,6 +219,14 @@ class WarriorSimApp(tk.Tk):
 
         ttk.Label(row, text="HS Cost").pack(side="left")
         ttk.Entry(row, textvariable=self.HS_cost, width=10).pack(side="left")
+
+        ttk.Label(row, text="Starting Rage").pack(side="left")
+        ttk.Entry(row, textvariable=self.starting_rage, width=10).pack(side="left")
+
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Priority").pack(side="left")
+        ttk.Entry(row, textvariable=self.ability_priority_var).pack(side="left", fill="x", expand=True)
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=2)
@@ -232,6 +260,7 @@ class WarriorSimApp(tk.Tk):
         self.slam_OH_label = ttk.Label(parent, text="Slam OH DPS: -")
         self.WW_label = ttk.Label(parent, text="WW DPS: -")
         self.BT_label = ttk.Label(parent, text="BT DPS: -")
+        self.DR_label = ttk.Label(parent, text="Dragon Roar DPS: -")
         self.ambi_label = ttk.Label(parent, text="Ambi Hit DPS: -")
         self.flurry_label = ttk.Label(parent, text="Flurry uptime: -")
         self.enrage_label = ttk.Label(parent, text="Enrage uptime: -")
@@ -254,7 +283,7 @@ class WarriorSimApp(tk.Tk):
         self.avg_OH_value = ttk.Label(parent, textvariable=self.avg_oh_var)
 
         for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
-                    self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.ambi_label,
+                    self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
                     self.dw_label, self.rend_label,self.dmg_proc_label,
                     self.avg_MH_label, self.avg_MH_value, self.avg_OH_label, self.avg_OH_value]:
@@ -304,7 +333,15 @@ class WarriorSimApp(tk.Tk):
                 BT_COST=self.BT_cost.get(),
                 slam_COST=self.slam_cost.get(),
                 ww_COST=self.ww_cost.get(),
-                HS_COST=self.HS_cost.get()
+                HS_COST=self.HS_cost.get(),
+                smf=self.smf.get(),
+                tg=self.tg.get(),
+                hunting_pack=self.hunting_pack.get(),
+                retri_crit=self.retri_crit.get(),
+                starting_rage=self.starting_rage.get(),
+                dragon_roar=self.dragon_roar.get(),
+                dragon_warrior=self.dragon_warrior.get(),
+                ability_priority=[x.strip() for x in self.ability_priority_var.get().split(",") if x.strip()]
             )
             self._show_results(result)
             self.last_result = result
@@ -330,6 +367,7 @@ class WarriorSimApp(tk.Tk):
         self.hs_label.config(text=f"Heroic Strike DPS: {result['mean_hs_dps']:.1f}")
         self.WW_label.config(text=f"WW DPS: {result['mean_WW_dps']:.1f}")
         self.BT_label.config(text=f"BT DPS: {result['mean_BT_dps']:.1f}")
+        self.DR_label.config(text=f"Dragon Roar DPS: {result.get('mean_DR_dps', 0):.1f}")
         self.flurry_label.config(text=f"Flurry uptime: {result['avg_flurry_uptime']*100:.1f}%")
         self.enrage_label.config(text=f"Enrage uptime: {result['avg_enrage_uptime']*100:.1f}%")
         self.crusader_label.config(text=f"Crusader uptime: {result['avg_crusader_uptime']*100:.1f}%")

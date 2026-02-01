@@ -37,8 +37,8 @@ class RendBleed:
         self.damage_per_tick = 0.0
         self.active = False
         self.total_damage = 0.0
-        self.total_uptime = 0.0      # <--- add this
-        self.last_update_time = 0.0  # <--- add this
+        self.total_uptime = 0.0      
+        self.last_update_time = 0.0  
 
     def trigger(self, current_time, total_ap, multi, trauma):
         """
@@ -353,6 +353,7 @@ class FightState:
         self.hs_damage = 0.0
         self.WW_damage = 0.0
         self.BT_damage = 0.0
+        self.DR_damage = 0.0
         self.slam_damage_MH = 0.0
         self.slam_damage_OH = 0.0
         self.total_ambi = 0.0
@@ -361,13 +362,14 @@ class FightState:
         self.slam_lockout_until = 0.0
         self.HS_queue = 0
         self.WW_CD_UP = 0.0
+        self.DR_CD_UP = 0.0
         self.BT_CD_UP = 0.0
         self.slam_proc = 0
         self.flurry_hits_remaining = 0
         self.last_event_time = 0.0
 
         # Base stats and multipliers
-        self.base_crit = self.crit - (self.agility / 20 / 100)
+        self.base_crit = self.crit
         self.current_total_ap = self.total_ap
         self.base_multi = self.multi
         self.multi_oh = self.multi
@@ -383,9 +385,9 @@ class FightState:
         self.ambidextrous = Ambidextrous()
 
         # Attack counts
-        self.attack_counts = {k: 0 for k in ["MH", "OH", "HS", "SLAM_MH", "SLAM_OH", "WW", "BT"]}
-        self.crit_counts = {k: 0 for k in ["MH_CRIT", "OH_CRIT", "HS_CRIT", "SLAM_MH_CRIT", "SLAM_OH_CRIT", "WW_CRIT", "BT_CRIT"]}
-        self.miss_counts = {k: 0 for k in ["MH_MISS", "OH_MISS", "HS_MISS", "SLAM_MH_MISS", "SLAM_OH_MISS", "WW_MISS", "BT_MISS"]}
+        self.attack_counts = {k: 0 for k in ["MH", "OH", "HS", "SLAM_MH", "SLAM_OH", "WW", "BT", "DR"]}
+        self.crit_counts = {k: 0 for k in ["MH_CRIT", "OH_CRIT", "HS_CRIT", "SLAM_MH_CRIT", "SLAM_OH_CRIT", "WW_CRIT", "BT_CRIT", "DR_CRIT"]}
+        self.miss_counts = {k: 0 for k in ["MH_MISS", "OH_MISS", "HS_MISS", "SLAM_MH_MISS", "SLAM_OH_MISS", "WW_MISS", "BT_MISS", "DR_MISS"]}
 
         # Procs
         self.proc_cooldowns = {}
@@ -428,6 +430,10 @@ class FightState:
 def _handle_procs(triggered, state):
     dmg = 0.0
     for proc in triggered:
+        if proc.get("Ironfoe"):
+            state.queue.put((state.time, state.next_id(), "Extra_Attack", {"source_proc": proc.get("name")}))
+            state.queue.put((state.time, state.next_id(), "Extra_Attack", {"source_proc": proc.get("name")}))
+
         if proc.get("mh_extra_hit"):
             state.queue.put((state.time, state.next_id(), "Extra_Attack", {"source_proc": proc.get("name")}))
 
@@ -458,8 +464,6 @@ def _cast_death_wish(state):
     if state.death_wish.can_cast(state.time) and state.rage >= state.DW_COST:
         state.death_wish.cast(state.time)
         state.rage -= state.DW_COST
-        if state.rage < state.HS_COST:
-            state.HS_queue = 0
         return True
     return False
 
@@ -489,42 +493,39 @@ def _cast_instant_slam(state):
             state.total_damage += proc_dmg
 
         if dmg > 0 and state.skull_cracker:
-            state.death_wish.next_available = max(state.time, state.death_wish.next_available - 2.0)
+            state.death_wish.next_available = max(state.time, state.death_wish.next_available - 4.0)
 
         if proc_flag:
             state.enrage.trigger(state.time)
             state.slam_proc = 1
 
         # Offhand
-        dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh)
-        dmg *= state.undending_fury
-        state.total_damage += dmg
-        state.slam_damage_OH += dmg
-        state.attack_counts["SLAM_OH"] += 1
-        if crit_flag:
-            state.crit_counts["SLAM_OH_CRIT"] += 1
-            state.deep_wounds.trigger(state.time, state.oh_base_avg)
-            state.flurry_hits_remaining = 3
-        triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
-        apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
-        proc_dmg = _handle_procs(triggered, state)
-        state.proc_damage_count += proc_dmg
-        state.total_damage += proc_dmg
-
-        if state.battering_ram:
-            triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.sunder_procs, cooldowns=state.proc_cooldowns)
+        if state.smf:
+            state.proc_damage_count += proc_dmg
+            state.total_damage += proc_dmg
+            dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh)
+            dmg *= state.undending_fury
+            state.total_damage += dmg
+            state.slam_damage_OH += dmg
+            state.attack_counts["SLAM_OH"] += 1
+            if crit_flag:
+                state.crit_counts["SLAM_OH_CRIT"] += 1
+                state.deep_wounds.trigger(state.time, state.oh_base_avg)
+                state.flurry_hits_remaining = 3
+            triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
             apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
             proc_dmg = _handle_procs(triggered, state)
             state.proc_damage_count += proc_dmg
             state.total_damage += proc_dmg
-
-        if dmg > 0 and state.skull_cracker:
-            state.death_wish.next_available = max(state.time, state.death_wish.next_available - 2.0)
-
-        if proc_flag:
-            state.enrage.trigger(state.time)
-            state.slam_proc = 1
-
+            if state.battering_ram:
+                triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.sunder_procs, cooldowns=state.proc_cooldowns)
+                apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
+                proc_dmg = _handle_procs(triggered, state)
+    
+            if proc_flag:
+                state.enrage.trigger(state.time)
+                state.slam_proc = 1
+    
         state.rage -= state.slam_COST
         if state.rage < state.HS_COST:
             state.HS_queue = 0
@@ -562,7 +563,9 @@ def _cast_ww(state):
     if state.rage >= state.ww_COST and state.time >= state.WW_CD_UP:
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
         
-        ww_base_mh = random.randint(int(state.min_dmg), int(state.max_dmg)) + state.current_total_ap / 14 * 2.4
+        norm_speed = 3.3 if getattr(state, "tg", False) else 2.4
+
+        ww_base_mh = random.randint(int(state.min_dmg), int(state.max_dmg)) + state.current_total_ap / 14 * norm_speed
         ww_base_mh *= state.undending_fury * state.imp_ww
         dmg_mh = ww_base_mh * (1 - DR) * state.multi
         crit_flag_mh = random.random() < state.crit
@@ -571,7 +574,7 @@ def _cast_ww(state):
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
             state.flurry_hits_remaining = 3
 
-        ww_base_oh = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + state.current_total_ap / 14 * 2.4
+        ww_base_oh = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + state.current_total_ap / 14 * norm_speed
         ww_base_oh *= state.undending_fury * state.imp_ww
         dmg_oh = ww_base_oh * (1 - DR) * state.multi_oh
         crit_flag_oh = random.random() < state.crit
@@ -598,7 +601,44 @@ def _cast_ww(state):
         state.rage -= state.ww_COST
         if state.rage < state.HS_COST:
             state.HS_queue = 0
-        state.WW_CD_UP = state.time + 8.0
+        
+        ww_cd = 6.0 if getattr(state, "dragon_roar", False) else 8.0
+        state.WW_CD_UP = state.time + ww_cd
+
+        if getattr(state, "dragon_warrior", False):
+            state.DR_CD_UP = max(state.time, state.DR_CD_UP - 5.0)
+        return True
+    return False
+
+def _cast_dragon_roar(state):
+    if not getattr(state, "dragon_roar", False): return False
+    if state.time >= state.DR_CD_UP:
+        # Damage: 0.84 * AP
+        base_dmg = state.current_total_ap * 0.84
+        DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
+        dmg = base_dmg * (1 - DR) * state.multi
+        
+        if random.random() < state.crit:
+            dmg *= 2.2
+            state.crit_counts["DR_CRIT"] += 1
+            state.deep_wounds.trigger(state.time, state.mh_base_avg)
+            state.flurry_hits_remaining = 3
+            
+        state.total_damage += dmg
+        state.DR_damage += dmg
+        state.attack_counts["DR"] += 1
+        
+        # Resets the cooldown for WW
+        state.WW_CD_UP = 0.0
+        
+        # 30s Cooldown
+        state.DR_CD_UP = state.time + 30.0
+
+        if getattr(state, "dragon_warrior", False) and not state.death_wish.active:
+            state.death_wish.active = True
+            state.death_wish.end_time = state.time + 5.0
+            state.death_wish.last_update_time = state.time
+
         return True
     return False
 
@@ -632,23 +672,23 @@ def _cast_hard_slam(state):
                 state.total_damage += proc_dmg
 
             if state.skull_cracker:
-                state.death_wish.next_available = max(state.time, state.death_wish.next_available - 2.0)
+                state.death_wish.next_available = max(state.time, state.death_wish.next_available - 4.0)
         
         if proc_flag:
             state.enrage.trigger(state.time)
             state.slam_proc = 1
+        if state.smf:
+            dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh)
+            dmg *= state.undending_fury
+            state.total_damage += dmg
+            state.slam_damage_OH += dmg
+            state.attack_counts["SLAM_OH"] += 1
 
-        dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh)
-        dmg *= state.undending_fury
-        state.total_damage += dmg
-        state.slam_damage_OH += dmg
-        state.attack_counts["SLAM_OH"] += 1
-
-        if dmg > 0:
-            if crit_flag:
-                state.crit_counts["SLAM_OH_CRIT"] += 1
-                state.deep_wounds.trigger(state.time, state.oh_base_avg)
-                state.flurry_hits_remaining = 3
+            if dmg > 0:
+                if crit_flag:
+                    state.crit_counts["SLAM_OH_CRIT"] += 1
+                    state.deep_wounds.trigger(state.time, state.oh_base_avg)
+                    state.flurry_hits_remaining = 3
             triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
             apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
             proc_dmg = _handle_procs(triggered, state)
@@ -662,9 +702,6 @@ def _cast_hard_slam(state):
                 state.proc_damage_count += proc_dmg
                 state.total_damage += proc_dmg
 
-            if state.skull_cracker:
-                state.death_wish.next_available = max(state.time, state.death_wish.next_available - 2.0)
-
         state.rage -= state.slam_COST
         if state.rage < state.HS_COST:
             state.HS_queue = 0
@@ -677,6 +714,7 @@ GCD_ACTIONS = {
     "BT": _cast_bt,
     "WW": _cast_ww,
     "SLAM_HARD": _cast_hard_slam,
+    "DR": _cast_dragon_roar,
 }
 
 def _handle_gcd(state, payload):
@@ -735,7 +773,7 @@ def _handle_mh_swing(state, payload):
 
         if state.ambi_ME:
             ambi_dmg = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + (state.current_total_ap / 14 * state.oh_speed)
-            ambi_dmg *= state.multi_oh * 0.75
+            ambi_dmg *= state.multi_oh * 0.6
             ambi_dmg *= (1 - DR)
             ambi_crit = random.random() < state.crit
             if ambi_crit:
@@ -983,6 +1021,9 @@ def _run_single_fight(**kwargs):
             state.multi *= 1.20
         state.multi *= state.PVE_PWR
         state.multi *= state.SMF
+        if getattr(state, "tg", False):
+            state.multi *= 0.9
+        state.multi *= getattr(state, "hunting_pack", 1.0)
         state.multi_oh = state.multi
         state.multi_oh *= 0.5 * state.impwield * state.ambidextrous.get_multiplier()
     
@@ -1018,6 +1059,7 @@ def _run_single_fight(**kwargs):
         "hs_dps": state.hs_damage / state.fight_length,
         "WW_dps": state.WW_damage / state.fight_length,
         "BT_dps": state.BT_damage / state.fight_length,
+        "DR_dps": state.DR_damage / state.fight_length,
         "Ambi_dps": state.total_ambi / state.fight_length,
         "all_attack_counts": [
             {
@@ -1152,6 +1194,7 @@ def _worker(args):
     results_slam_OH = []
     results_BT = []
     results_WW = []
+    results_DR = []
     results_hs = []
     results_ambi = []
     result_proc_dmg = []
@@ -1177,6 +1220,7 @@ def _worker(args):
         results_slam_OH.append(fight["slam_OH_dps"])
         results_BT.append(fight["BT_dps"])
         results_WW.append(fight["WW_dps"])
+        results_DR.append(fight["DR_dps"])
         results_hs.append(fight["hs_dps"])
         results_ambi.append(fight["Ambi_dps"])
         result_proc_dmg.append(fight["Proc_dmg_dps"])
@@ -1201,6 +1245,7 @@ def _worker(args):
         "results_slam_OH": results_slam_OH,
         "results_BT": results_BT,
         "results_WW": results_WW,
+        "results_DR": results_DR,
         "results_hs": results_hs,
         "results_ambi": results_ambi,
         "result_proc_dmg": result_proc_dmg,
@@ -1226,20 +1271,23 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    dual_wield=True, battering_ram=True, ambi_ME=True, skull_cracker=True, tank_dummy=False,
                    kings=False, str_earth=False, shamanistic_rage=False, outrage=False,
                    bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False,
-                   multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0):
+                   multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0, smf=False, tg=False,
+                   hunting_pack=False, retri_crit=False, starting_rage=50.0, dragon_roar=False,
+                   dragon_warrior=False):
 
     if stats is None:
         stats = {}
     
     # Default ability priority if not provided
     if ability_priority is None:
-        ability_priority = ["DW", "SLAM_PROC", "BT", "WW", "SLAM_HARD"]
+        ability_priority = ["DW", "DR", "SLAM_PROC", "BT", "WW", "SLAM_HARD"]
 
     # Deconstruct character sheet stats to get base values for simulation
     strength = stats.get("strength", 0)
     agility = stats.get("Agility", 121)
     attack_power = stats.get("attack_power", 2800)
     crit = stats.get("crit", 31)/100 - 0.048
+    crit -=agility/20/100
     hit = stats.get("hit", 8)/100
     your_armor = stats.get("Your_Armor", 4000)
 
@@ -1260,6 +1308,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     strength_total = strength + extra_str * 1.2  # Assuming 1.2x is for a talent/buff
     agility_total = agility + extra_agi
     crit_total = crit + extra_crit
+    if retri_crit:
+        crit_total += 0.03
 
     # Prepare fight arguments
     fight_kwargs = {
@@ -1305,7 +1355,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "bloodlust_time": stats.get("bloodlust_time", 10.0),
         "bloodfury_time": stats.get("bloodfury_time", 10.0),
         "ability_priority": ability_priority,
-        "Starting_rage": 50.0,
+        "Starting_rage": starting_rage,
         "impwield": 1.25,
         "DW_COST": 10.0,
         "gcd": 1.5,
@@ -1314,7 +1364,12 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "undending_fury": 1.1,
         "imp_ww": 1.2,
         "PVE_PWR": 1.2475,
-        "SMF": 1.05,
+        "SMF": 1.05 if smf else 1.0,
+        "smf": smf,
+        "tg": tg,
+        "hunting_pack": 1.03 if hunting_pack else 1.0,
+        "dragon_roar": dragon_roar,
+        "dragon_warrior": dragon_warrior,
         "mob_level": stats.get("mob_level", 63),
     }
 
@@ -1337,6 +1392,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "results_slam_OH": [],
         "results_BT": [],
         "results_WW": [],
+        "results_DR": [],
         "results_hs": [],
         "results_ambi": [],
         "result_proc_dmg": [],
@@ -1357,7 +1413,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     for chunk in chunk_results:
         for key in ["results_total", "results_white_MH", "results_white_OH", "results_slam_MH",
                     "results_slam_OH", "results_BT", "results_WW", "results_hs", "results_ambi",
-                    "result_proc_dmg", "results_avg_MH_dmg", "results_avg_OH_dmg",
+                    "results_DR", "result_proc_dmg", "results_avg_MH_dmg", "results_avg_OH_dmg",
                     "results_deep_wounds_dps", "results_rend"]:
             final_results[key].extend(chunk[key])
         final_results["flurry_uptime_total"] += chunk["flurry_uptime_total"]
@@ -1379,6 +1435,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "mean_slam_OH_dps": sum(final_results["results_slam_OH"])/iters,
         "mean_BT_dps": sum(final_results["results_BT"])/iters,
         "mean_WW_dps": sum(final_results["results_WW"])/iters,
+        "mean_DR_dps": sum(final_results["results_DR"])/iters,
         "mean_hs_dps": sum(final_results["results_hs"])/iters,
         "mean_ambi_dps": sum(final_results["results_ambi"])/iters,
         "mean_proc_dmg_dps": sum(final_results["result_proc_dmg"])/iters,
@@ -1388,6 +1445,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "results_slam_MH": final_results["results_slam_MH"],
         "results_slam_OH": final_results["results_slam_OH"],
         "results_WW": final_results["results_WW"],
+        "results_DR": final_results["results_DR"],
         "results_BT": final_results["results_BT"],
         "results_hs": final_results["results_hs"],
         "results_ambi": final_results["results_ambi"],
