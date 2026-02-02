@@ -116,6 +116,7 @@ class WarriorSimApp(tk.Tk):
         self.bloodthirsty = tk.BooleanVar(value=False)
         self.raging_onslaught = tk.BooleanVar(value=False)
         self.here_comes_the_big_one = tk.BooleanVar(value=False)
+        self.titans_fury = tk.BooleanVar(value=False)
 
 
         # Weapon Proc Options
@@ -226,6 +227,8 @@ class WarriorSimApp(tk.Tk):
             .grid(row=7, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Here Comes the big one", variable=self.here_comes_the_big_one)\
             .grid(row=8, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Titans Fury", variable=self.titans_fury)\
+            .grid(row=9, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Tank dummy", variable=self.tank_dummy)\
             .grid(row=7, column=2, sticky="w", pady=2)
         
@@ -385,6 +388,7 @@ class WarriorSimApp(tk.Tk):
                 bloodthirsty=self.bloodthirsty.get(),
                 raging_onslaught=self.raging_onslaught.get(),
                 here_comes_the_big_one=self.here_comes_the_big_one.get(),
+                titans_fury=self.titans_fury.get(),
                 ability_priority=final_priority
             )
             self._show_results(result)

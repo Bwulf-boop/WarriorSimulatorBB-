@@ -411,6 +411,9 @@ class FightState:
         self.ambidextrous = Ambidextrous()
         self.rb_buff = RagingBlowBuff()
 
+        self.titans_fury_dmg_buff_end_time = 0.0
+        self.titans_fury_free_hs_stacks = 0
+
         # Attack counts
         self.attack_counts = {k: 0 for k in ["MH", "OH", "HS", "SLAM_MH", "SLAM_OH", "WW", "BT", "DR", "RB"]}
         self.crit_counts = {k: 0 for k in ["MH_CRIT", "OH_CRIT", "HS_CRIT", "SLAM_MH_CRIT", "SLAM_OH_CRIT", "WW_CRIT", "BT_CRIT", "DR_CRIT", "RB_CRIT"]}
@@ -485,6 +488,11 @@ def _handle_procs(triggered, state):
             dmg += proc_dmg
 
     return dmg * state.multi
+
+def _get_hs_cost(state):
+    if getattr(state, "titans_fury", False) and state.titans_fury_free_hs_stacks > 0:
+        return 0.0
+    return state.HS_COST
 
 
 def _cast_death_wish(state):
@@ -602,7 +610,7 @@ def _cast_bt(state):
         if random.random() < proc_chance: state.slam_proc = 1
 
         state.rage -= state.BT_COST
-        if state.rage < state.HS_COST:
+        if state.rage < _get_hs_cost(state):
             state.HS_queue = 0
         state.BT_CD_UP = state.time + 6.0
         return True
@@ -648,8 +656,15 @@ def _cast_ww(state):
         state.proc_damage_count += proc_dmg
         state.total_damage += proc_dmg
 
+        if getattr(state, "titans_fury", False):
+            if state.rage > 50:
+                state.titans_fury_dmg_buff_end_time = state.time + 10.0
+            elif state.rage < 50:
+                state.titans_fury_free_hs_stacks = 3
+
         state.rage -= state.ww_COST
-        if state.rage < state.HS_COST:
+        
+        if state.rage < _get_hs_cost(state):
             state.HS_queue = 0
         
         ww_cd = 6.0 if getattr(state, "dragon_roar", False) else 8.0
@@ -664,7 +679,7 @@ def _cast_dragon_roar(state):
     if not getattr(state, "dragon_roar", False): return False
     if state.time >= state.DR_CD_UP:
         # Damage: 0.84 * AP
-        base_dmg = state.current_total_ap * 0.84
+        base_dmg = state.current_total_ap * 0.7 + 765
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
         dmg = base_dmg * (1 - DR) * state.multi
         
@@ -753,7 +768,7 @@ def _cast_hard_slam(state):
                 state.total_damage += proc_dmg
 
         state.rage -= state.slam_COST
-        if state.rage < state.HS_COST:
+        if state.rage < _get_hs_cost(state):
             state.HS_queue = 0
         return True
     return False
@@ -899,7 +914,8 @@ def _handle_mh_swing(state, payload):
         state.queue.put((state.slam_lockout_until, state.next_id(), "MH_SWING", False))
         return
 
-    if state.HS_queue == 1 and state.rage >= state.HS_COST:
+    hs_cost = _get_hs_cost(state)
+    if state.HS_queue == 1 and state.rage >= hs_cost:
         state.HS_queue = 0 # Consume the queue
         hs_base = random.randint(int(state.min_dmg), int(state.max_dmg)) + 201 + state.current_total_ap / 14 * state.mh_speed
         
@@ -923,13 +939,16 @@ def _handle_mh_swing(state, payload):
         hs_dmg_val *= state.multi
         state.hs_damage += hs_dmg_val
         state.total_damage += hs_dmg_val
-        state.rage -= state.HS_COST
+        state.rage -= hs_cost
+
+        if hs_cost == 0 and state.titans_fury_free_hs_stacks > 0:
+            state.titans_fury_free_hs_stacks -= 1
         
         # HS only triggers Bloodsurge if Bloodthirsty is NOT active
         if not getattr(state, "bloodthirsty", False):
             if random.random() < 0.2: state.slam_proc = 1
             
-        if state.rage < state.HS_COST:
+        if state.rage < _get_hs_cost(state):
             state.HS_queue = 0
         
         state.attack_counts["HS"] += 1
@@ -985,7 +1004,7 @@ def _handle_mh_swing(state, payload):
         if state.rage > 100.0: state.rage = 100.0
 
         # After generating rage, check if we can queue HS
-        if state.rage >= state.HS_COST:
+        if state.rage >= _get_hs_cost(state):
             state.HS_queue = 1
         
         next_time = state.time + swing_speed
@@ -1029,7 +1048,7 @@ def _handle_oh_swing(state, payload):
     if state.rage > 100.0: state.rage = 100.0
 
     # After generating rage, check if we can queue HS
-    if state.rage >= state.HS_COST:
+    if state.rage >= _get_hs_cost(state):
         state.HS_queue = 1
     next_time = state.time + swing_speed
     if next_time <= state.fight_length:
@@ -1068,14 +1087,14 @@ def _handle_extra_attack(state, payload):
     if state.rage > 100.0: state.rage = 100.0
 
     # After generating rage, check if we can queue HS
-    if state.rage >= state.HS_COST:
+    if state.rage >= _get_hs_cost(state):
         state.HS_queue = 1
 
 def _handle_tank_dummy(state, payload):
     state.rage += 60
     if state.rage > 100: state.rage = 100
     next_time = state.time + 1.5
-    if state.rage >= state.HS_COST:
+    if state.rage >= _get_hs_cost(state):
         state.HS_queue = 1
     if next_time <= state.fight_length:
         state.queue.put((next_time, state.next_id(), "Tank_dummy", False))
@@ -1190,6 +1209,8 @@ def _run_single_fight(**kwargs):
         state.multi *= getattr(state, "hunting_pack", 1.0)
         if getattr(state, "heavy_weight", False):
             state.multi *= 1.06
+        if getattr(state, "titans_fury", False) and state.time < state.titans_fury_dmg_buff_end_time:
+            state.multi *= 1.05
         state.multi_oh = state.multi
         state.multi_oh *= 0.5 * state.impwield * state.ambidextrous.get_multiplier()
     
@@ -1443,7 +1464,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False,
                    multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0, smf=False, tg=False,
                    hunting_pack=False, retri_crit=False, starting_rage=50.0, dragon_roar=False, RB_COST=20.0,
-                   dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False):
+                   dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False, titans_fury=False):
 
     if stats is None:
         stats = {}
@@ -1547,6 +1568,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "bloodthirsty": bloodthirsty,
         "raging_onslaught": raging_onslaught,
         "here_comes_the_big_one": here_comes_the_big_one,
+        "titans_fury": titans_fury,
         "mob_level": stats.get("mob_level", 63),
     }
 
