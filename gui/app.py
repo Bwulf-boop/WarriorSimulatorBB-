@@ -71,12 +71,12 @@ class WarriorSimApp(tk.Tk):
         self.ww_cost = tk.DoubleVar(value=25.0)
         self.mh_speed = tk.DoubleVar(value=2.6)
         self.oh_speed = tk.DoubleVar(value=2.7)
-        self.fight_length = tk.DoubleVar(value=60.0)
-        self.iterations = tk.IntVar(value=1000)
+        self.fight_length = tk.DoubleVar(value=140.0)
+        self.iterations = tk.IntVar(value=5000)
         self.dual_wield = tk.BooleanVar(value=True)
         self.multi = tk.DoubleVar(value=1.0)
         self.battering_ram = tk.BooleanVar(value=True)
-        self.tank_dummy = tk.BooleanVar(value=False)
+        self.tank_dummy = tk.BooleanVar(value=True)
         self.ambi_ME = tk.BooleanVar(value=True)
         self.skull_cracker = tk.BooleanVar(value=True)
         self.kings = tk.BooleanVar(value=False)
@@ -90,16 +90,32 @@ class WarriorSimApp(tk.Tk):
         self.trauma = tk.BooleanVar(value=False)
         self.HoJ = tk.BooleanVar(value=False)
         self.maelstrom = tk.BooleanVar(value=False)
-        self.bloodlust_time = tk.DoubleVar(value=61.0)
-        self.bloodfury_time = tk.DoubleVar(value=61.0)
-        self.smf = tk.BooleanVar(value=False)
+        self.bloodlust_time = tk.DoubleVar(value=1.0)
+        self.bloodfury_time = tk.DoubleVar(value=1.0)
+        self.smf = tk.BooleanVar(value=True)
         self.tg = tk.BooleanVar(value=False)
         self.hunting_pack = tk.BooleanVar(value=False)
         self.retri_crit = tk.BooleanVar(value=False)
         self.starting_rage = tk.DoubleVar(value=50.0)
         self.dragon_roar = tk.BooleanVar(value=False)
         self.dragon_warrior = tk.BooleanVar(value=False)
-        self.ability_priority_var = tk.StringVar(value="DW, DR, SLAM_PROC, BT, WW, SLAM_HARD")
+        
+        # Ability Priority Variables
+        self.priority_vars = {}
+        self.ABILITIES = ["DW", "DR", "SLAM_PROC", "BT", "WW", "SLAM_HARD", "RB", "RB_BUFF", "BLOODRAGE", "BERSERKER_RAGE", "RECKLESSNESS"]
+        defaults = {
+            "DW": 1, "DR": 2, "SLAM_PROC": 3, "BT": 4, "WW": 5, "SLAM_HARD": 6,
+            "BLOODRAGE": 7, "RECKLESSNESS": 8
+        }
+        for abil in self.ABILITIES:
+            self.priority_vars[abil] = tk.IntVar(value=defaults.get(abil, 0))
+            
+        self.raging_blow = tk.BooleanVar(value=False)
+        self.heavy_weight = tk.BooleanVar(value=False)
+        self.power_slam = tk.BooleanVar(value=True)
+        self.bloodthirsty = tk.BooleanVar(value=False)
+        self.raging_onslaught = tk.BooleanVar(value=False)
+        self.here_comes_the_big_one = tk.BooleanVar(value=False)
 
 
         # Weapon Proc Options
@@ -151,6 +167,19 @@ class WarriorSimApp(tk.Tk):
         ttk.Label(row, text="Damage Multiplier").pack(side="left")
         ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
         # ---------- Checkbox Grid ----------
+        
+        special_frame = ttk.Frame(frame)
+        special_frame.pack(fill="x", pady=2)
+        ttk.Checkbutton(special_frame, text="Ambi ME", variable=self.ambi_ME).pack(side="left", padx=5)
+        ttk.Checkbutton(special_frame, text="Dragon Roar", variable=self.dragon_roar).pack(side="left", padx=5)
+        ttk.Checkbutton(special_frame, text="Raging Blow", variable=self.raging_blow).pack(side="left", padx=5)
+        ttk.Checkbutton(special_frame, text="Heavy Weight", variable=self.heavy_weight).pack(side="left", padx=5)
+
+        talent_frame = ttk.Frame(frame)
+        talent_frame.pack(fill="x", pady=2)
+        ttk.Checkbutton(talent_frame, text="SMF", variable=self.smf).pack(side="left", padx=5)
+        ttk.Checkbutton(talent_frame, text="TG", variable=self.tg).pack(side="left", padx=5)
+
         checkbox_frame = ttk.Frame(frame)
         checkbox_frame.pack(fill="x", pady=6)
         
@@ -160,14 +189,10 @@ class WarriorSimApp(tk.Tk):
             .grid(row=1, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Outrage", variable=self.outrage)\
             .grid(row=2, column=0, sticky="w", pady=2)
-        ttk.Checkbutton(checkbox_frame, text="Ambi ME", variable=self.ambi_ME)\
-            .grid(row=3, column=0, sticky="w", pady=2)
-        ttk.Checkbutton(checkbox_frame, text="Dragon Roar", variable=self.dragon_roar)\
-            .grid(row=4, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Dragon Warrior", variable=self.dragon_warrior)\
-            .grid(row=5, column=0, sticky="w", pady=2)
+            .grid(row=3, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Skull Cracker", variable=self.skull_cracker)\
-            .grid(row=6, column=0, sticky="w", pady=2)
+            .grid(row=4, column=0, sticky="w", pady=2)
         
         ttk.Checkbutton(checkbox_frame, text="Kings", variable=self.kings)\
             .grid(row=0, column=1, sticky="w", pady=2, padx=(20, 0))
@@ -189,20 +214,20 @@ class WarriorSimApp(tk.Tk):
             .grid(row=3, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Maelstrom", variable=self.maelstrom)\
             .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
-        ttk.Checkbutton(checkbox_frame, text="SMF", variable=self.smf)\
-            .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
-        ttk.Checkbutton(checkbox_frame, text="TG", variable=self.tg)\
-            .grid(row=5, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Hunting Pack", variable=self.hunting_pack)\
-            .grid(row=7, column=1, sticky="w", pady=2, padx=(20, 0))
+            .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
             .grid(row=6, column=1, sticky="w", pady=2, padx=(20, 0))
-        
-
-        
-
-        ttk.Checkbutton(checkbox_frame, text="Tank dummy", variable=self.tank_dummy)\
+        ttk.Checkbutton(checkbox_frame, text="Power Slam", variable=self.power_slam)\
+            .grid(row=5, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Bloodthirsty", variable=self.bloodthirsty)\
+            .grid(row=6, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Raging Onslaught", variable=self.raging_onslaught)\
             .grid(row=7, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Here Comes the big one", variable=self.here_comes_the_big_one)\
+            .grid(row=8, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Tank dummy", variable=self.tank_dummy)\
+            .grid(row=7, column=2, sticky="w", pady=2)
         
         self.run_button = ttk.Button(frame, text="Run Simulation", command=self._run_simulation_thread)
         self.run_button.pack(pady=10)
@@ -223,10 +248,14 @@ class WarriorSimApp(tk.Tk):
         ttk.Label(row, text="Starting Rage").pack(side="left")
         ttk.Entry(row, textvariable=self.starting_rage, width=10).pack(side="left")
 
-        row = ttk.Frame(frame)
-        row.pack(fill="x", pady=2)
-        ttk.Label(row, text="Priority").pack(side="left")
-        ttk.Entry(row, textvariable=self.ability_priority_var).pack(side="left", fill="x", expand=True)
+        # Priority Grid
+        prio_frame = ttk.LabelFrame(frame, text="Ability Priority (1=Highest, 0=Disabled)")
+        prio_frame.pack(fill="x", pady=4)
+        for i, abil in enumerate(self.ABILITIES):
+            r = i // 3
+            c = (i % 3) * 2
+            ttk.Label(prio_frame, text=abil, font=("Arial", 8)).grid(row=r, column=c, sticky="e", padx=2, pady=2)
+            ttk.Entry(prio_frame, textvariable=self.priority_vars[abil], width=3).grid(row=r, column=c+1, sticky="w", padx=2, pady=2)
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=2)
@@ -261,6 +290,7 @@ class WarriorSimApp(tk.Tk):
         self.WW_label = ttk.Label(parent, text="WW DPS: -")
         self.BT_label = ttk.Label(parent, text="BT DPS: -")
         self.DR_label = ttk.Label(parent, text="Dragon Roar DPS: -")
+        self.RB_label = ttk.Label(parent, text="Raging Blow DPS: -")
         self.ambi_label = ttk.Label(parent, text="Ambi Hit DPS: -")
         self.flurry_label = ttk.Label(parent, text="Flurry uptime: -")
         self.enrage_label = ttk.Label(parent, text="Enrage uptime: -")
@@ -283,7 +313,7 @@ class WarriorSimApp(tk.Tk):
         self.avg_OH_value = ttk.Label(parent, textvariable=self.avg_oh_var)
 
         for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
-                    self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.ambi_label,
+                    self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.RB_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
                     self.dw_label, self.rend_label,self.dmg_proc_label,
                     self.avg_MH_label, self.avg_MH_value, self.avg_OH_label, self.avg_OH_value]:
@@ -306,6 +336,14 @@ class WarriorSimApp(tk.Tk):
             stats["OH_procs"] = selected_OH_procs
             stats["bloodlust_time"] = self.bloodlust_time.get()
     
+            # Build priority list from integers
+            prio_list = []
+            for abil, var in self.priority_vars.items():
+                val = var.get()
+                if val > 0:
+                    prio_list.append((val, abil))
+            prio_list.sort(key=lambda x: x[0])
+            final_priority = [x[1] for x in prio_list]
 
             result = run_simulation(
                 iterations=self.iterations.get(),
@@ -341,7 +379,13 @@ class WarriorSimApp(tk.Tk):
                 starting_rage=self.starting_rage.get(),
                 dragon_roar=self.dragon_roar.get(),
                 dragon_warrior=self.dragon_warrior.get(),
-                ability_priority=[x.strip() for x in self.ability_priority_var.get().split(",") if x.strip()]
+                raging_blow=self.raging_blow.get(),
+                heavy_weight=self.heavy_weight.get(),
+                power_slam=self.power_slam.get(),
+                bloodthirsty=self.bloodthirsty.get(),
+                raging_onslaught=self.raging_onslaught.get(),
+                here_comes_the_big_one=self.here_comes_the_big_one.get(),
+                ability_priority=final_priority
             )
             self._show_results(result)
             self.last_result = result
@@ -368,6 +412,7 @@ class WarriorSimApp(tk.Tk):
         self.WW_label.config(text=f"WW DPS: {result['mean_WW_dps']:.1f}")
         self.BT_label.config(text=f"BT DPS: {result['mean_BT_dps']:.1f}")
         self.DR_label.config(text=f"Dragon Roar DPS: {result.get('mean_DR_dps', 0):.1f}")
+        self.RB_label.config(text=f"Raging Blow DPS: {result.get('mean_RB_dps', 0):.1f}")
         self.flurry_label.config(text=f"Flurry uptime: {result['avg_flurry_uptime']*100:.1f}%")
         self.enrage_label.config(text=f"Enrage uptime: {result['avg_enrage_uptime']*100:.1f}%")
         self.crusader_label.config(text=f"Crusader uptime: {result['avg_crusader_uptime']*100:.1f}%")
