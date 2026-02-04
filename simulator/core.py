@@ -874,7 +874,7 @@ def _cast_raging_blow(state):
     return True
 
 def _cast_raging_blow_buff(state):
-    if state.rb_buff.has_stacks():
+    if state.rb_buff.stacks == 3:
         return _cast_raging_blow(state)
     return False
 
@@ -1205,7 +1205,7 @@ def _run_single_fight(**kwargs):
         state.multi *= state.PVE_PWR
         state.multi *= state.SMF
         if getattr(state, "tg", False):
-            state.multi *= 0.9
+            state.multi *= 0.954
         state.multi *= getattr(state, "hunting_pack", 1.0)
         if getattr(state, "heavy_weight", False):
             state.multi *= 1.06

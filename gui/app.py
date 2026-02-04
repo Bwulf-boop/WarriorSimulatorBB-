@@ -14,8 +14,28 @@ class WarriorSimApp(tk.Tk):
         self.geometry("900x1000")
 
         # ---------- Main Container ----------
-        container = ttk.Frame(self)
-        container.pack(fill="both", expand=True, padx=12, pady=12)
+        main_frame = ttk.Frame(self)
+        main_frame.pack(fill="both", expand=True)
+
+        self.main_canvas = tk.Canvas(main_frame)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=self.main_canvas.yview)
+        
+        container = ttk.Frame(self.main_canvas, padding=12)
+        container.bind(
+            "<Configure>",
+            lambda e: self.main_canvas.configure(
+                scrollregion=self.main_canvas.bbox("all")
+            )
+        )
+
+        canvas_frame = self.main_canvas.create_window((0, 0), window=container, anchor="nw")
+        self.main_canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.main_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.main_canvas.bind("<Configure>", lambda e: self.main_canvas.itemconfig(canvas_frame, width=e.width))
+        self.bind_all("<MouseWheel>", lambda e: self.main_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
         # ---------- Frames ----------
         self.left_frame = ttk.LabelFrame(container, text="Character Stats")
