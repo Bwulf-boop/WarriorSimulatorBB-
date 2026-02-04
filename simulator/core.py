@@ -418,6 +418,7 @@ class FightState:
         self.attack_counts = {k: 0 for k in ["MH", "OH", "HS", "SLAM_MH", "SLAM_OH", "WW", "BT", "DR", "RB"]}
         self.crit_counts = {k: 0 for k in ["MH_CRIT", "OH_CRIT", "HS_CRIT", "SLAM_MH_CRIT", "SLAM_OH_CRIT", "WW_CRIT", "BT_CRIT", "DR_CRIT", "RB_CRIT"]}
         self.miss_counts = {k: 0 for k in ["MH_MISS", "OH_MISS", "HS_MISS", "SLAM_MH_MISS", "SLAM_OH_MISS", "WW_MISS", "BT_MISS", "DR_MISS", "RB_MISS"]}
+        self.dodge_counts = {k: 0 for k in ["MH_DODGE", "OH_DODGE", "HS_DODGE", "SLAM_MH_DODGE", "SLAM_OH_DODGE", "WW_DODGE", "BT_DODGE", "DR_DODGE", "RB_DODGE"]}
 
         # Procs
         self.proc_cooldowns = {}
@@ -456,6 +457,48 @@ class FightState:
     def next_id(self):
         self.event_id += 1
         return self.event_id
+
+def _roll_attack_outcome(state, attack_type, is_offhand, bonus_crit=0.0, bonus_hit=0.0, ignore_dw_penalty=False):
+    """
+    Determines the outcome of an attack based on the attack table.
+    attack_type: "WHITE" or "YELLOW"
+    """
+    hit = state.hit + bonus_hit
+    crit = state.crit + bonus_crit
+    expertise = state.oh_expertise if is_offhand else state.mh_expertise
+    
+    # 1. Miss
+    if attack_type == "YELLOW" or ignore_dw_penalty:
+        miss_chance = max(0.0, 0.08 - hit)
+    elif state.dual_wield:
+        miss_chance = max(0.0, 0.27 - hit) # 0.08 base + 0.19 DW penalty
+    else:
+        miss_chance = max(0.0, 0.08 - hit)
+        
+    # 2. Dodge (Expertise reduces dodge chance, cap is 26 expertise for 6.5%)
+    dodge_chance = max(0.0, 0.065 - (expertise * 0.0025))
+    
+    # 3. Glance (White attacks only)
+    glance_chance = 0.25 if attack_type == "WHITE" else 0.0
+    
+    roll = random.random()
+    
+    if roll < miss_chance:
+        return "MISS"
+    roll -= miss_chance
+    
+    if roll < dodge_chance:
+        return "DODGE"
+    roll -= dodge_chance
+    
+    if roll < glance_chance:
+        return "GLANCE"
+    roll -= glance_chance
+    
+    if roll < crit:
+        return "CRIT"
+        
+    return "HIT"
 
 def _handle_procs(triggered, state):
     dmg = 0.0
@@ -506,7 +549,16 @@ def _cast_death_wish(state):
 def _cast_instant_slam(state):
     if state.rage >= state.slam_COST and state.slam_proc >= 1:
         state.slam_proc = 0
-        dmg, crit_flag, proc_flag = _resolve_slam(state.min_dmg, state.max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False))
+        
+        outcome = _roll_attack_outcome(state, "YELLOW", False)
+        if outcome in ["MISS", "DODGE"]:
+            state.rage -= state.slam_COST * 0.2 # Refund 80%
+            if outcome == "MISS": state.miss_counts["SLAM_MH_MISS"] += 1
+            if outcome == "DODGE": state.dodge_counts["SLAM_MH_DODGE"] += 1
+            state.attack_counts["SLAM_MH"] += 1
+            return True
+
+        dmg, crit_flag, proc_flag = _resolve_slam_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False), outcome=outcome)
         dmg *= state.undending_fury
         state.total_damage += dmg
         state.slam_damage_MH += dmg
@@ -539,7 +591,15 @@ def _cast_instant_slam(state):
         if state.smf:
             state.proc_damage_count += proc_dmg
             state.total_damage += proc_dmg
-            dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False))
+            
+            outcome_oh = _roll_attack_outcome(state, "YELLOW", True)
+            if outcome_oh in ["MISS", "DODGE"]:
+                if outcome_oh == "MISS": state.miss_counts["SLAM_OH_MISS"] += 1
+                if outcome_oh == "DODGE": state.dodge_counts["SLAM_OH_DODGE"] += 1
+                state.attack_counts["SLAM_OH"] += 1
+                return True # Main hand hit, so GCD consumed, rage spent
+
+            dmg, crit_flag, proc_flag = _resolve_slam_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False), outcome=outcome_oh)
             dmg *= state.undending_fury
             state.total_damage += dmg
             state.slam_damage_OH += dmg
@@ -578,6 +638,15 @@ def _cast_bt(state):
         if has_bloodthirsty_proc:
             state.slam_proc = 0
             forced_crit = True
+        
+        outcome = _roll_attack_outcome(state, "YELLOW", False)
+        if outcome in ["MISS", "DODGE"]:
+            state.rage -= state.BT_COST * 0.2 # Refund 80%
+            if outcome == "MISS": state.miss_counts["BT_MISS"] += 1
+            if outcome == "DODGE": state.dodge_counts["BT_DODGE"] += 1
+            state.attack_counts["BT"] += 1
+            state.BT_CD_UP = state.time + 6.0
+            return True
 
         bt_base = state.current_total_ap * 0.5
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
@@ -586,7 +655,7 @@ def _cast_bt(state):
         if getattr(state, "here_comes_the_big_one", False) and (state.attack_counts["BT"] + 1) % 4 == 0:
             dmg *= 1.75
 
-        if forced_crit or random.random() < state.crit:
+        if forced_crit or outcome == "CRIT":
             dmg *= 2.2
             state.crit_counts["BT_CRIT"] += 1
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
@@ -619,32 +688,54 @@ def _cast_bt(state):
 def _cast_ww(state):
     if state.rage >= state.ww_COST and state.time >= state.WW_CD_UP:
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
-        
         norm_speed = 3.3 if getattr(state, "tg", False) else 2.4
+        
+        outcome_mh = _roll_attack_outcome(state, "YELLOW", False)
+        outcome_oh = "MISS"
+        if state.dual_wield:
+            outcome_oh = _roll_attack_outcome(state, "YELLOW", True)
+        
+        # Refund if both miss/dodge
+        mh_missed = outcome_mh in ["MISS", "DODGE"]
+        oh_missed = outcome_oh in ["MISS", "DODGE"] if state.dual_wield else True
+        
+        if mh_missed and oh_missed:
+            state.rage -= state.ww_COST * 0.2
+            if outcome_mh == "MISS": state.miss_counts["WW_MISS"] += 1
+            if outcome_mh == "DODGE": state.dodge_counts["WW_DODGE"] += 1
+            state.attack_counts["WW"] += 1
+            ww_cd = 6.0 if getattr(state, "dragon_roar", False) else 8.0
+            state.WW_CD_UP = state.time + ww_cd
+            return True
 
-        ww_base_mh = random.randint(int(state.min_dmg), int(state.max_dmg)) + state.current_total_ap / 14 * norm_speed
-        ww_base_mh *= state.undending_fury * state.imp_ww
-        dmg_mh = ww_base_mh * (1 - DR) * state.multi
-        crit_flag_mh = random.random() < state.crit
-        if crit_flag_mh:
-            dmg_mh *= 2.2
-            state.deep_wounds.trigger(state.time, state.mh_base_avg)
-            state.flurry_hits_remaining = 3
-
-        ww_base_oh = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + state.current_total_ap / 14 * norm_speed
-        ww_base_oh *= state.undending_fury * state.imp_ww
-        dmg_oh = ww_base_oh * (1 - DR) * state.multi_oh
-        crit_flag_oh = random.random() < state.crit
-        if crit_flag_oh:
-            dmg_oh *= 2
-            state.deep_wounds.trigger(state.time, state.oh_base_avg)
-            state.flurry_hits_remaining = 3
+        dmg_mh = 0.0
+        if not mh_missed:
+            ww_base_mh = random.randint(int(state.min_dmg), int(state.max_dmg)) + state.current_total_ap / 14 * norm_speed
+            ww_base_mh *= state.undending_fury * state.imp_ww
+            dmg_mh = ww_base_mh * (1 - DR) * state.multi
+            if outcome_mh == "CRIT":
+                dmg_mh *= 2.2
+                state.deep_wounds.trigger(state.time, state.mh_base_avg)
+                state.flurry_hits_remaining = 3
+        
+        dmg_oh = 0.0
+        if state.dual_wield and not oh_missed:
+            ww_base_oh = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + state.current_total_ap / 14 * norm_speed
+            ww_base_oh *= state.undending_fury * state.imp_ww
+            dmg_oh = ww_base_oh * (1 - DR) * state.multi_oh
+            if outcome_oh == "CRIT":
+                dmg_oh *= 2
+                state.deep_wounds.trigger(state.time, state.oh_base_avg)
+                state.flurry_hits_remaining = 3
+        
+        if outcome_mh == "MISS": state.miss_counts["WW_MISS"] += 1
+        if outcome_mh == "DODGE": state.dodge_counts["WW_DODGE"] += 1
 
         total_ww_dmg = dmg_mh + dmg_oh
         state.total_damage += total_ww_dmg
         state.WW_damage += total_ww_dmg
         state.attack_counts["WW"] += 1
-        if crit_flag_mh or crit_flag_oh: state.crit_counts["WW_CRIT"] += 1
+        if outcome_mh == "CRIT" or outcome_oh == "CRIT": state.crit_counts["WW_CRIT"] += 1
 
         proc_chance = 0.4 if getattr(state, "bloodthirsty", False) else 0.2
         if random.random() < proc_chance: state.slam_proc = 1
@@ -678,12 +769,20 @@ def _cast_ww(state):
 def _cast_dragon_roar(state):
     if not getattr(state, "dragon_roar", False): return False
     if state.time >= state.DR_CD_UP:
+        outcome = _roll_attack_outcome(state, "YELLOW", False)
+        if outcome in ["MISS", "DODGE"]:
+             if outcome == "MISS": state.miss_counts["DR_MISS"] += 1
+             if outcome == "DODGE": state.dodge_counts["DR_DODGE"] += 1
+             state.attack_counts["DR"] += 1
+             state.DR_CD_UP = state.time + 30.0
+             return True
+
         # Damage: 0.84 * AP
         base_dmg = state.current_total_ap * 0.7 + 765
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
         dmg = base_dmg * (1 - DR) * state.multi
         
-        if random.random() < state.crit:
+        if outcome == "CRIT":
             dmg *= 2.2
             state.crit_counts["DR_CRIT"] += 1
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
@@ -712,7 +811,15 @@ def _cast_hard_slam(state):
         slam_cast_time = 1.5
         state.slam_lockout_until = state.time + slam_cast_time
         
-        dmg, crit_flag, proc_flag = _resolve_slam(state.min_dmg, state.max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False))
+        outcome = _roll_attack_outcome(state, "YELLOW", False)
+        if outcome in ["MISS", "DODGE"]:
+            state.rage -= state.slam_COST * 0.2
+            if outcome == "MISS": state.miss_counts["SLAM_MH_MISS"] += 1
+            if outcome == "DODGE": state.dodge_counts["SLAM_MH_DODGE"] += 1
+            state.attack_counts["SLAM_MH"] += 1
+            return True
+
+        dmg, crit_flag, proc_flag = _resolve_slam_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False), outcome=outcome)
         dmg *= state.undending_fury
         state.total_damage += dmg
         state.slam_damage_MH += dmg
@@ -743,7 +850,14 @@ def _cast_hard_slam(state):
             state.enrage.trigger(state.time)
             state.slam_proc = 1
         if state.smf:
-            dmg, crit_flag, proc_flag = _resolve_slam(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False))
+            outcome_oh = _roll_attack_outcome(state, "YELLOW", True)
+            if outcome_oh in ["MISS", "DODGE"]:
+                if outcome_oh == "MISS": state.miss_counts["SLAM_OH_MISS"] += 1
+                if outcome_oh == "DODGE": state.dodge_counts["SLAM_OH_DODGE"] += 1
+                state.attack_counts["SLAM_OH"] += 1
+                return True
+
+            dmg, crit_flag, proc_flag = _resolve_slam_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False), outcome=outcome_oh)
             dmg *= state.undending_fury
             state.total_damage += dmg
             state.slam_damage_OH += dmg
@@ -818,28 +932,34 @@ def _cast_raging_blow(state):
     # Raging Onslaught adds 30% crit to Raging Blow
     rb_crit = state.crit + 0.30 if getattr(state, "raging_onslaught", False) else state.crit
 
+    outcome_mh = _roll_attack_outcome(state, "YELLOW", False, bonus_crit=(0.30 if getattr(state, "raging_onslaught", False) else 0.0))
+    outcome_oh = "MISS"
+    if state.dual_wield:
+        outcome_oh = _roll_attack_outcome(state, "YELLOW", True, bonus_crit=(0.30 if getattr(state, "raging_onslaught", False) else 0.0))
+
+    mh_missed = outcome_mh in ["MISS", "DODGE"]
+    oh_missed = outcome_oh in ["MISS", "DODGE"] if state.dual_wield else True
+
+    if mh_missed and oh_missed:
+        state.rage += state.RB_COST * 0.8 # Refund 80% (since we deducted full cost above)
+        if outcome_mh == "MISS": state.miss_counts["RB_MISS"] += 1
+        if outcome_mh == "DODGE": state.dodge_counts["RB_DODGE"] += 1
+        state.attack_counts["RB"] += 1
+        return True
+
     # MH Strike (180% damage)
-    dmg_mh, crit_mh, miss_mh = _resolve_swing(
-        state.min_dmg, state.max_dmg, state.current_total_ap, rb_crit, state.hit+0.19, 
-        state.dual_wield, state.armor, state.armor_penetration, 
-        0, norm_speed, state.mob_level, multi=state.multi * 1.8
-    )
-    
-    if crit_mh:
-        state.deep_wounds.trigger(state.time, state.mh_base_avg)
-        state.flurry_hits_remaining = 3
+    dmg_mh = 0.0
+    if not mh_missed:
+        dmg_mh, _, _ = _resolve_swing_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi * 1.8, outcome=outcome_mh)
+        if outcome_mh == "CRIT":
+            state.deep_wounds.trigger(state.time, state.mh_base_avg)
+            state.flurry_hits_remaining = 3
 
     # OH Strike (180% damage)
     dmg_oh = 0.0
-    crit_oh = False
-    miss_oh = 1
-    if state.dual_wield:
-        dmg_oh, crit_oh, miss_oh = _resolve_swing(
-            state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, rb_crit, state.hit+0.19, 
-            state.dual_wield, state.armor, state.armor_penetration, 
-            0, norm_speed, state.mob_level, multi=state.multi_oh * 1.8
-        )
-        if crit_oh:
+    if state.dual_wield and not oh_missed:
+        dmg_oh, _, _ = _resolve_swing_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi_oh * 1.8, outcome=outcome_oh)
+        if outcome_oh == "CRIT":
             state.deep_wounds.trigger(state.time, state.oh_base_avg)
             state.flurry_hits_remaining = 3
 
@@ -848,23 +968,23 @@ def _cast_raging_blow(state):
     state.RB_damage += total_rb_dmg
     state.attack_counts["RB"] += 1
     
-    if crit_mh:
+    if outcome_mh == "CRIT":
         state.crit_counts["RB_CRIT"] += 1
-    if crit_oh:
+    if outcome_oh == "CRIT":
         state.crit_counts["RB_CRIT"] += 1
-    if miss_mh:
+    if outcome_mh == "MISS":
         state.miss_counts["RB_MISS"] += 1
-    if miss_oh:
-        state.miss_counts["RB_MISS"] += 1
+    if outcome_mh == "DODGE":
+        state.dodge_counts["RB_DODGE"] += 1
 
     # Procs
-    if not miss_mh:
+    if not mh_missed:
         triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
         apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
         proc_dmg = _handle_procs(triggered, state)
         state.proc_damage_count += proc_dmg
         state.total_damage += proc_dmg
-    if not miss_oh:
+    if state.dual_wield and not oh_missed:
         triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
         apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
         proc_dmg = _handle_procs(triggered, state)
@@ -918,7 +1038,15 @@ def _handle_mh_swing(state, payload):
     if state.HS_queue == 1 and state.rage >= hs_cost:
         state.HS_queue = 0 # Consume the queue
         hs_base = random.randint(int(state.min_dmg), int(state.max_dmg)) + 201 + state.current_total_ap / 14 * state.mh_speed
-        
+
+        outcome = _roll_attack_outcome(state, "YELLOW", False, bonus_crit=0.15)
+        if outcome in ["MISS", "DODGE"]:
+            if outcome == "MISS": state.miss_counts["HS_MISS"] += 1
+            if outcome == "DODGE": state.dodge_counts["HS_DODGE"] += 1
+            state.attack_counts["HS"] += 1
+            # Rage not consumed on miss/dodge for HS (On Next Swing)
+            return
+
         triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
         apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
         proc_dmg = _handle_procs(triggered, state)
@@ -928,8 +1056,7 @@ def _handle_mh_swing(state, payload):
         DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
         hs_dmg_val = hs_base * (1 - DR)
         
-        hs_crit = random.random() < (state.crit + 0.15)
-        if hs_crit:
+        if outcome == "CRIT":
             hs_dmg_val *= 2.2
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
             state.rage += 10
@@ -952,7 +1079,7 @@ def _handle_mh_swing(state, payload):
             state.HS_queue = 0
         
         state.attack_counts["HS"] += 1
-        if hs_crit: state.crit_counts["HS_CRIT"] += 1
+        if outcome == "CRIT": state.crit_counts["HS_CRIT"] += 1
 
         if state.ambi_ME:
             ambi_dmg = random.randint(int(state.oh_min_dmg), int(state.oh_max_dmg)) + (state.current_total_ap / 14 * state.oh_speed)
@@ -981,7 +1108,10 @@ def _handle_mh_swing(state, payload):
         # If we intended to HS but couldn't, unqueue
         if state.HS_queue == 1:
             state.HS_queue = 0
-        dmg, was_crit, was_miss = _resolve_swing(state.min_dmg, state.max_dmg, state.current_total_ap, state.crit, state.hit, state.dual_wield, state.armor, state.armor_penetration, 0, state.mh_speed, state.mob_level, multi=state.multi)
+        
+        outcome = _roll_attack_outcome(state, "WHITE", False)
+        dmg, was_crit, was_miss = _resolve_swing_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, state.mob_level, multi=state.multi, outcome=outcome)
+        
         state.total_damage += dmg
         state.white_MH_damage += dmg
         state.attack_counts["MH"] += 1
@@ -991,8 +1121,11 @@ def _handle_mh_swing(state, payload):
             state.flurry_hits_remaining = 3
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
         
-        if was_miss:
-            state.miss_counts["MH_MISS"] += 1
+        if outcome == "MISS": state.miss_counts["MH_MISS"] += 1
+        if outcome == "DODGE": state.dodge_counts["MH_DODGE"] += 1
+        
+        if outcome in ["MISS", "DODGE"]:
+            pass
         else:
             triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
             apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
@@ -1024,7 +1157,9 @@ def _handle_oh_swing(state, payload):
         state.queue.put((state.slam_lockout_until, state.next_id(), "OH_SWING", False))
         return
 
-    dmg, was_crit, was_miss = _resolve_swing(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.crit, state.hit, state.dual_wield, state.armor, state.armor_penetration, state.HS_queue, state.oh_speed, state.mob_level, multi=state.multi_oh)
+    ignore_dw_penalty = (state.HS_queue == 1)
+    outcome = _roll_attack_outcome(state, "WHITE", True, ignore_dw_penalty=ignore_dw_penalty)
+    dmg, was_crit, was_miss = _resolve_swing_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, state.mob_level, multi=state.multi_oh, outcome=outcome)
 
     state.total_damage += dmg
     state.white_OH_damage += dmg
@@ -1035,8 +1170,11 @@ def _handle_oh_swing(state, payload):
         state.deep_wounds.trigger(state.time, state.oh_base_avg)
         state.flurry_hits_remaining = 3
     
-    if was_miss:
-        state.miss_counts["OH_MISS"] += 1
+    if outcome == "MISS": state.miss_counts["OH_MISS"] += 1
+    if outcome == "DODGE": state.dodge_counts["OH_DODGE"] += 1
+
+    if outcome in ["MISS", "DODGE"]:
+        pass
     else:
         triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
         apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
@@ -1058,7 +1196,8 @@ def _handle_extra_attack(state, payload):
     if state.flurry_hits_remaining > 0:
         state.flurry_hits_remaining -= 1
     
-    dmg, was_crit, was_miss = _resolve_swing(state.min_dmg, state.max_dmg, state.current_total_ap, state.crit, state.hit, state.dual_wield, state.armor, state.armor_penetration, state.HS_queue, state.mh_speed, state.mob_level, multi=state.multi)
+    outcome = _roll_attack_outcome(state, "WHITE", False)
+    dmg, was_crit, was_miss = _resolve_swing_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, state.mob_level, multi=state.multi, outcome=outcome)
     
     state.total_damage += dmg
     state.white_MH_damage += dmg
@@ -1069,8 +1208,11 @@ def _handle_extra_attack(state, payload):
         state.flurry_hits_remaining = 3
         state.deep_wounds.trigger(state.time, state.mh_base_avg)
 
-    if was_miss:
-        state.miss_counts["MH_MISS"] += 1
+    if outcome == "MISS": state.miss_counts["MH_MISS"] += 1
+    if outcome == "DODGE": state.dodge_counts["MH_DODGE"] += 1
+
+    if outcome in ["MISS", "DODGE"]:
+        pass
     else:
         procs = state.MH_EXTRA_PROCS.copy()
         source_proc = payload.get("source_proc")
@@ -1254,7 +1396,8 @@ def _run_single_fight(**kwargs):
                 atk: {
                     "hits": state.attack_counts[atk],
                     "crits": state.crit_counts[f"{atk}_CRIT"],
-                    "misses": state.miss_counts[f"{atk}_MISS"]
+                    "misses": state.miss_counts[f"{atk}_MISS"],
+                    "dodges": state.dodge_counts[f"{atk}_DODGE"]
                 }
                 for atk in state.attack_counts
             }
@@ -1275,51 +1418,37 @@ def _run_single_fight(**kwargs):
 # -------------------------
 # Swing, Slam resolution
 # -------------------------
-def _resolve_swing(min_dmg, max_dmg, current_total_ap, crit, hit, dual_wield, armor, armor_penetration,
-                   HS_queue, base_speed, mob_level, multi=1.0, forced_crit=None):
-    roll = random.random()
-    if HS_queue ==1: hit+=0.19
-    if dual_wield:dual_wield_penalty=0.19
-    else:
-        dual_wield_penalty=0
-    MISS = max(0.08+dual_wield_penalty - hit, 0)
-    GLANCE = 0.25
+def _resolve_swing_damage(min_dmg, max_dmg, current_total_ap, armor, armor_penetration,
+                   base_speed, mob_level, multi=1.0, outcome="HIT"):
+    
     base_damage = random.randint(int(min_dmg), int(max_dmg)) + current_total_ap  / 14 * base_speed
     DR = _calc_dr(armor, armor_penetration, mob_level)
 
-    if forced_crit is not None:
-        was_crit = 1 if forced_crit else 0
-        dmg = base_damage * (2 if was_crit else 1) * (1 - DR)
-        was_miss = 0
+    dmg = 0.0
+    was_crit = 0
+    was_miss = 0
+
+    if outcome == "MISS" or outcome == "DODGE":
+        dmg = 0.0
+        was_miss = 1
+    elif outcome == "GLANCE":
+        dmg = base_damage * 0.75 * (1 - DR)
+    elif outcome == "CRIT":
+        dmg = base_damage * 2 * (1 - DR)
+        was_crit = 1
     else:
-        if roll < MISS:
-            dmg = 0.0
-            was_crit = 0
-            was_miss = 1
-        elif roll < MISS + GLANCE:
-            dmg = base_damage * 0.75 * (1 - DR)
-            was_crit = 0
-            was_miss = 0
-        elif roll < MISS + GLANCE + crit:
-            dmg = base_damage * 2 * (1 - DR)
-            was_crit = 1
-            was_miss = 0
-        else:
-            dmg = base_damage * (1 - DR)
-            was_crit = 0
-            was_miss = 0
+        dmg = base_damage * (1 - DR)
 
     dmg *= multi
     return dmg, was_crit, was_miss
 
-def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_penetration, base_speed,oh=False,
-                  mob_level=63, multi=1.0, forced_crit=None, was_miss=0, power_slam=False):
+def _resolve_slam_damage(min_dmg, max_dmg, current_total_ap, armor, armor_penetration, base_speed,oh=False,
+                  mob_level=63, multi=1.0, power_slam=False, outcome="HIT"):
     """
     Resolves a slam, returns (damage, crit_flag, proc_flag)
     """
-    roll = random.random()
-    MISS = max(0.08 - hit, 0)
-    is_crit = forced_crit if forced_crit is not None else (roll < crit)
+    is_crit = (outcome == "CRIT")
+    
     if oh:
         base_damage = random.randint(int(min_dmg), int(max_dmg)) + 78 + current_total_ap / 14 * base_speed
     else:
@@ -1329,13 +1458,10 @@ def _resolve_slam(min_dmg, max_dmg, current_total_ap, crit, hit, armor, armor_pe
     # Slam proc: 50% chance per slam
     proc_flag = power_slam and (random.random() < 0.5)
 
-    if roll < MISS:
+    if outcome in ["MISS", "DODGE"]:
         dmg = 0.0
-        is_crit = 0
-    elif  forced_crit is not None or roll < crit + MISS:
-    # On a hit, roll for crit
+    elif is_crit:
         dmg = base_damage * 2.2 * (1 - DR)
-        is_crit= 1
     else:
         dmg = base_damage * (1 - DR)
 
@@ -1516,6 +1642,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "oh_min_dmg": stats.get("oh_min_dmg", 100),
         "oh_max_dmg": stats.get("oh_max_dmg", 157),
         "armor": stats.get("boss_armor", 4644),
+        "mh_expertise": stats.get("mh_expertise", 0),
+        "oh_expertise": stats.get("oh_expertise", 0),
         "armor_penetration": stats.get("armor_penetration", 10)/5/100,
         "haste": 1 + stats.get("haste", 0)/1000,
         "wf": 1 + stats.get("wf", 0)/1000,

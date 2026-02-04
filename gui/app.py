@@ -67,21 +67,26 @@ class WarriorSimApp(tk.Tk):
             "strength": tk.DoubleVar(value=433),
             "Agility": tk.DoubleVar(value=121),
             "attack_power": tk.DoubleVar(value=1515),
-            "crit": tk.DoubleVar(value=30.1),
+            "crit": tk.DoubleVar(value=34.4),
             "hit": tk.DoubleVar(value=8),
+            "mh_expertise": tk.DoubleVar(value=26),
+            "oh_expertise": tk.DoubleVar(value=26),
             "Your_Armor": tk.DoubleVar(value=4234),
-            "boss_armor": tk.DoubleVar(value=3758),
+            "boss_armor": tk.DoubleVar(value=4200),
             "armor_penetration": tk.DoubleVar(value=57),
             "min_dmg": tk.DoubleVar(value=97),
             "max_dmg": tk.DoubleVar(value=157),
             "oh_min_dmg": tk.DoubleVar(value=100),
             "oh_max_dmg": tk.DoubleVar(value=157),
+            "mh_expertise": tk.DoubleVar(value=26),
+            "oh_expertise": tk.DoubleVar(value=26),
             "haste": tk.DoubleVar(value=17),
             "wf": tk.DoubleVar(value=200),
             "Add_Str": tk.DoubleVar(value=0),
             "Add_AP": tk.DoubleVar(value=0),
             "Add_Agi": tk.DoubleVar(value=0),
             "Add_Crit": tk.DoubleVar(value=0),
+
 
         }
         # Add new cost variables
@@ -477,7 +482,7 @@ class WarriorSimApp(tk.Tk):
            for i, fight_counts in enumerate(self.last_result['all_attack_counts']):
                counts_text += f"Fight {i+1}:\n"
                for atk, val in fight_counts.items():
-                   counts_text += f"  {atk}: Hits={val['hits']}, Crits={val['crits']}, Misses={val['misses']}\n"
+                   counts_text += f"  {atk}: Hits={val['hits']}, Crits={val['crits']}, Misses={val['misses']}, Dodges={val['dodges']}\n"
                counts_text += "\n"
     
            # Show in a scrollable window
