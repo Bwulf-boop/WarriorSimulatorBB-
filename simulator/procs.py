@@ -42,13 +42,13 @@ ALL_PROCS = {
     "Wound": {
         "chance": 2,           #
         "ap_based": True,          # flag to scale with AP
-        "ap_multiplier": 0.36,    # 36.5% of your total AP
+        "ap_multiplier": 0.30,    # 36.5% of your total AP
         "base_damage": 22,          # Base damage
         "weapon_multiplier": 1.0,
         "ignore_if_active": False   # optional: scale differently for MH/OH
     },
     "Rend Garg": {
-        "chance": 1.5,          # 1 ppm
+        "chance": 1.5,          # ppm
         "bleed": True,            # flag to handle in fight loop
         "duration": 30,         # optional, for reference
         "tick_interval": 3.0,
