@@ -245,7 +245,7 @@ class WarriorSimApp(tk.Tk):
             .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Eternal Flame", variable=self.eternal_flame)\
             .grid(row=5, column=2, sticky="w", pady=2, padx=(20, 0))
-        ttk.Checkbutton(checkbox_frame, text="Hunting Pack", variable=self.hunting_pack)\
+        ttk.Checkbutton(checkbox_frame, text="Ferocious Inspiration", variable=self.hunting_pack)\
             .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
             .grid(row=6, column=1, sticky="w", pady=2, padx=(20, 0))
