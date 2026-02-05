@@ -63,6 +63,14 @@ ALL_PROCS = {
         "cooldown": 45.0,
         "ignore_if_active" : True
     },
+    "Eternal Flame": {
+        "flat_chance": True,
+        "chance": 0.1,          # 10% on hit
+        "haste_buff": 0.213,      # 213 haste
+        "duration": 10.0,
+        "cooldown": 45.0,
+        "ignore_if_active" : True
+    },
     "HoJ": {
         "flat_chance": True,
         "chance": 0.02,   # 2% per main-hand hit
@@ -91,6 +99,13 @@ ALL_PROCS = {
         "chance": 0.5,   # 
         "Ironfoe": True,
         "ignore_if_active": False  # This triggers one extra MH swing
+    },
+    "Bonereavers Edge": {
+        "chance": 2,            #2 ppm?
+        "arpen_rating_buff": 68,
+        "duration": 10.0,
+        "max_stacks": 3,
+        "ignore_if_active": False
     },
     "Blood Talon": {
         "chance": 1,          # 1 ppm
@@ -144,12 +159,13 @@ def resolve_on_hit_procs(time, weapon_speed, procs_to_check=None, cooldowns=None
 
 def apply_on_hit_procs(triggered_procs, time, onhit_buffs):
     for proc in triggered_procs:
+        max_stacks = proc.get("max_stacks", 1)
         if "str_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "strength", proc["str_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
+            onhit_buffs.add_buff(proc["name"], "strength", proc["str_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False), max_stacks=max_stacks)
         if "ap_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "ap", proc["ap_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
+            onhit_buffs.add_buff(proc["name"], "ap", proc["ap_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False), max_stacks=max_stacks)
         if "haste_buff" in proc:
-            onhit_buffs.add_buff(proc["name"], "haste", proc["haste_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False))
+            onhit_buffs.add_buff(proc["name"], "haste", proc["haste_buff"], proc["duration"], time, ignore_if_active=proc.get("ignore_if_active", False), max_stacks=max_stacks)
         if "crit_buff" in proc:
             buff_name = "icon crit" if proc["name"] == "icon" else proc["name"]
             onhit_buffs.add_buff(
@@ -158,5 +174,12 @@ def apply_on_hit_procs(triggered_procs, time, onhit_buffs):
                 proc["crit_buff"],  # Amount
                 proc["duration"],   # Duration
                 time,               # Start time
-                ignore_if_active=proc.get("ignore_if_active", False)
+                ignore_if_active=proc.get("ignore_if_active", False),
+                max_stacks=max_stacks
+            )
+        if "arpen_rating_buff" in proc:
+            arpen_percent = proc["arpen_rating_buff"] / 500.0
+            onhit_buffs.add_buff(
+                proc["name"], "arpen", arpen_percent, proc["duration"], time,
+                ignore_if_active=proc.get("ignore_if_active", False), max_stacks=max_stacks
             )

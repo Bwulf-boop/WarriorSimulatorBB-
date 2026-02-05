@@ -19,6 +19,7 @@ class WarriorSimApp(tk.Tk):
 
         self.main_canvas = tk.Canvas(main_frame)
         scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=self.main_canvas.yview)
+        h_scrollbar = ttk.Scrollbar(main_frame, orient="horizontal", command=self.main_canvas.xview)
         
         container = ttk.Frame(self.main_canvas, padding=12)
         container.bind(
@@ -29,12 +30,13 @@ class WarriorSimApp(tk.Tk):
         )
 
         canvas_frame = self.main_canvas.create_window((0, 0), window=container, anchor="nw")
-        self.main_canvas.configure(yscrollcommand=scrollbar.set)
+        self.main_canvas.configure(yscrollcommand=scrollbar.set, xscrollcommand=h_scrollbar.set)
 
-        self.main_canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
+        h_scrollbar.pack(side="bottom", fill="x")
+        self.main_canvas.pack(side="left", fill="both", expand=True)
 
-        self.main_canvas.bind("<Configure>", lambda e: self.main_canvas.itemconfig(canvas_frame, width=e.width))
+        self.main_canvas.bind("<Configure>", lambda e: self.main_canvas.itemconfig(canvas_frame, width=max(e.width, container.winfo_reqwidth())))
         self.bind_all("<MouseWheel>", lambda e: self.main_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
         # ---------- Frames ----------
@@ -115,6 +117,7 @@ class WarriorSimApp(tk.Tk):
         self.trauma = tk.BooleanVar(value=False)
         self.HoJ = tk.BooleanVar(value=False)
         self.maelstrom = tk.BooleanVar(value=False)
+        self.eternal_flame = tk.BooleanVar(value=False)
         self.bloodlust_time = tk.DoubleVar(value=1.0)
         self.bloodfury_time = tk.DoubleVar(value=1.0)
         self.smf = tk.BooleanVar(value=True)
@@ -145,8 +148,8 @@ class WarriorSimApp(tk.Tk):
 
 
         # Weapon Proc Options
-        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe"]
+        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge"]
+        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -240,6 +243,8 @@ class WarriorSimApp(tk.Tk):
             .grid(row=3, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Maelstrom", variable=self.maelstrom)\
             .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Eternal Flame", variable=self.eternal_flame)\
+            .grid(row=5, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Hunting Pack", variable=self.hunting_pack)\
             .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
@@ -325,6 +330,8 @@ class WarriorSimApp(tk.Tk):
         self.crusader_label = ttk.Label(parent, text="Crusader uptime: -")
         self.crusader_oh_label = ttk.Label(parent, text="Crusader oh uptime: -")
         self.Empyrian_Demolisher_label = ttk.Label(parent, text="Empyrian Demolisher uptime: -")
+        self.bonereavers_label = ttk.Label(parent, text="Bonereavers Edge uptime: -")
+        self.eternal_flame_label = ttk.Label(parent, text="Eternal Flame uptime: -")
         self.dw_label = ttk.Label(parent, text="Deep Wounds DPS: -")
         self.rend_label = ttk.Label(parent, text="Rend Garg DPS: -")
         self.dmg_proc_label = ttk.Label(parent, text="DMG Proc DPS: -")
@@ -343,7 +350,8 @@ class WarriorSimApp(tk.Tk):
         for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
                     self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.RB_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
-                    self.dw_label, self.rend_label,self.dmg_proc_label,
+                    self.bonereavers_label, self.eternal_flame_label,
+                    self.dw_label, self.rend_label, self.dmg_proc_label,
                     self.avg_MH_label, self.avg_MH_value, self.avg_OH_label, self.avg_OH_value]:
             lbl.pack(anchor="w", pady=1)
 
@@ -395,6 +403,7 @@ class WarriorSimApp(tk.Tk):
                 trauma = self.trauma.get(),
                 HoJ = self.HoJ.get(),
                 maelstrom = self.maelstrom.get(),
+                eternal_flame = self.eternal_flame.get(),
                 outrage = self.outrage.get(),
                 BT_COST=self.BT_cost.get(),
                 slam_COST=self.slam_cost.get(),
@@ -447,6 +456,8 @@ class WarriorSimApp(tk.Tk):
         self.crusader_label.config(text=f"Crusader uptime: {result['avg_crusader_uptime']*100:.1f}%")
         self.crusader_oh_label.config(text=f"Crusader OH uptime: {result['avg_crusader_oh_uptime']*100:.1f}%")
         self.Empyrian_Demolisher_label.config(text=f"Empyrian Demolisher uptime: {result['avg_Empyrian_Demolisher_uptime']*100:.1f}%")
+        self.bonereavers_label.config(text=f"Bonereavers Edge uptime: {result['avg_bonereavers_uptime']*100:.1f}%")
+        self.eternal_flame_label.config(text=f"Eternal Flame uptime: {result['avg_eternal_flame_uptime']*100:.1f}%")
         self.avg_mh_var.set(f"{result.get('mean_avg_MH_dmg', 0):.1f}")
         self.avg_oh_var.set(f"{result.get('mean_avg_OH_dmg', 0):.1f}")
         self.dw_label.config(text=f"Deep Wounds DPS: {result.get('Deep Wounds DPS', 0):.1f}")

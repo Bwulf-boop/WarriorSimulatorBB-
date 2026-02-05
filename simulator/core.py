@@ -47,8 +47,8 @@ class RendBleed:
         If no ticks exist yet, schedule them now.
         """
         num_ticks = int(self.duration / self.tick_interval)
-        if trauma: total_proc_damage = (260 + 1.3 * total_ap) * multi * 1.3
-        else: total_proc_damage = (260 + 1.3 * total_ap) * multi
+        if trauma: total_proc_damage = (268.5 + 1.284 * total_ap) * multi * 1.3
+        else: total_proc_damage = (268.5 + 1.284 * total_ap) * multi
 
         self.damage_per_tick = total_proc_damage / num_ticks
 
@@ -200,13 +200,31 @@ class BuffTracker:
         self.uptime = {}  # Track total uptime per buff name
         self.last_update_time = 0.0
 
-    def add_buff(self, name, stat, amount, duration, start_time, ignore_if_active=False):
+    def add_buff(self, name, stat, amount, duration, start_time, ignore_if_active=False, max_stacks=1):
         """
         Add a new buff or refresh an existing one.
         If ignore_if_active is True, do not refresh an existing buff.
         """
         self.update(start_time)  # update uptime before changing buffs
 
+        # Handle stacking buffs
+        if max_stacks > 1:
+            existing_stacks = [b for b in self.active_buffs if b["name"] == name]
+            
+            # Refresh ALL existing stacks so they expire together
+            for buff in existing_stacks:
+                buff["start_time"] = start_time
+                buff["duration"] = duration
+
+            if len(existing_stacks) < max_stacks:
+                # Add a new stack
+                self.active_buffs.append({
+                    "name": name, "stat": stat, "amount": amount, "duration": duration,
+                    "start_time": start_time
+                })
+            return
+
+        # Handle non-stacking buffs
         for buff in self.active_buffs:
             if buff["name"] == name:
                 if ignore_if_active:
@@ -216,7 +234,7 @@ class BuffTracker:
                 buff["amount"] = amount
                 return
 
-        # Add new buff
+        # Add new buff if it doesn't exist yet
         self.active_buffs.append({
             "name": name,
             "stat": stat,
@@ -232,10 +250,15 @@ class BuffTracker:
         """
         dt = current_time - self.last_update_time
 
+        max_active_times = {}
+
         for buff in self.active_buffs:
             active_time = min(current_time, buff["start_time"] + buff["duration"]) - max(self.last_update_time, buff["start_time"])
             if active_time > 0:
-                self.uptime[buff["name"]] = self.uptime.get(buff["name"], 0) + active_time
+                max_active_times[buff["name"]] = max(max_active_times.get(buff["name"], 0.0), active_time)
+
+        for name, t in max_active_times.items():
+            self.uptime[name] = self.uptime.get(name, 0) + t
 
         # Remove expired buffs
         self.active_buffs = [b for b in self.active_buffs if current_time < b["start_time"] + b["duration"]]
@@ -440,6 +463,10 @@ class FightState:
             self.MH_PROCS.add("Maelstrom")
             self.OH_PROCS.add("Maelstrom")
             self.MH_EXTRA_PROCS.add("Maelstrom")
+        if getattr(self, "eternal_flame", False):
+            self.MH_PROCS.add("Eternal Flame")
+            self.OH_PROCS.add("Eternal Flame")
+            self.MH_EXTRA_PROCS.add("Eternal Flame")
 
         # Armor and enrage setup
         if not hasattr(self, 'mob_level'): self.mob_level = 63
@@ -449,6 +476,7 @@ class FightState:
         if self.faeri: self.armor *= 0.95
         if not hasattr(self, 'armor_penetration'): self.armor_penetration = 0.0
         if self.battering_ram: self.armor_penetration += 0.025
+        self.base_armor_penetration = self.armor_penetration
         self.enrage_multi = 1.1 * 1.05 if self.outrage else 1.1
 
         # Uptime tracking
@@ -1304,6 +1332,7 @@ def _run_single_fight(**kwargs):
        # STR -> AP convertion with buffs before event
         state.crit = state.base_crit
         state.crit += active_mods.get("crit", 0.0)
+        state.armor_penetration = state.base_armor_penetration + active_mods.get("arpen", 0.0)
         
         current_strength = state.strength
         if state.kings and state.str_earth:
@@ -1377,6 +1406,8 @@ def _run_single_fight(**kwargs):
     crusader_uptime = state.onhit_buffs.get_uptime("Crusader", state.fight_length) + state.onhit_buffs.get_uptime("Brutal", state.fight_length)
     crusader_oh_uptime = state.onhit_buffs.get_uptime("Crusader_OH", state.fight_length) + state.onhit_buffs.get_uptime("Brutal_OH", state.fight_length)
     Empyrian_Demolisher_uptime = state.onhit_buffs.get_uptime("Empyrian Demolisher", state.fight_length)
+    bonereavers_uptime = state.onhit_buffs.get_uptime("Bonereavers Edge", state.fight_length)
+    eternal_flame_uptime = state.onhit_buffs.get_uptime("Eternal Flame", state.fight_length)
 
     return {
         "slam_MH_dps": state.slam_damage_MH / state.fight_length,
@@ -1409,6 +1440,8 @@ def _run_single_fight(**kwargs):
         "crusader_uptime": crusader_uptime,
         "crusader_oh_uptime": crusader_oh_uptime,
         "Empyrian_Demolisher_uptime": Empyrian_Demolisher_uptime,
+        "bonereavers_uptime": bonereavers_uptime,
+        "eternal_flame_uptime": eternal_flame_uptime,
         "death_wish_uptime": state.death_wish.total_uptime / state.fight_length,
         "Rend_dps": state.rend_bleed.total_damage / state.fight_length,
         "Proc_dmg_dps": state.proc_damage_count / state.fight_length,
@@ -1522,6 +1555,8 @@ def _worker(args):
     crusader_uptime_total = 0.0
     crusader_oh_uptime_total = 0.0
     Empyrian_Demolisher_uptime_total = 0.0
+    bonereavers_uptime_total = 0.0
+    eternal_flame_uptime_total = 0.0
     death_wish_uptime_total = 0.0
     all_attack_counts = []
 
@@ -1550,6 +1585,8 @@ def _worker(args):
         crusader_uptime_total += fight["crusader_uptime"]
         crusader_oh_uptime_total += fight["crusader_oh_uptime"]
         Empyrian_Demolisher_uptime_total += fight["Empyrian_Demolisher_uptime"]
+        bonereavers_uptime_total += fight["bonereavers_uptime"]
+        eternal_flame_uptime_total += fight["eternal_flame_uptime"]
         death_wish_uptime_total += fight["death_wish_uptime"]
         all_attack_counts.append(fight["all_attack_counts"][0])
 
@@ -1575,6 +1612,8 @@ def _worker(args):
         "crusader_uptime_total": crusader_uptime_total,
         "crusader_oh_uptime_total": crusader_oh_uptime_total,
         "Empyrian_Demolisher_uptime_total": Empyrian_Demolisher_uptime_total,
+        "bonereavers_uptime_total": bonereavers_uptime_total,
+        "eternal_flame_uptime_total": eternal_flame_uptime_total,
         "death_wish_uptime_total": death_wish_uptime_total,
         "all_attack_counts": all_attack_counts,
         "iterations_chunk": iterations_chunk
@@ -1587,7 +1626,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    fight_length=60.0, stats=None, ability_priority=None,
                    dual_wield=True, battering_ram=True, ambi_ME=True, skull_cracker=True, tank_dummy=False,
                    kings=False, str_earth=False, shamanistic_rage=False, outrage=False,
-                   bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False,
+                   bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False, eternal_flame=False,
                    multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0, smf=False, tg=False,
                    hunting_pack=False, retri_crit=False, starting_rage=50.0, dragon_roar=False, RB_COST=20.0,
                    dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False, titans_fury=False):
@@ -1664,6 +1703,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "trauma": trauma,
         "HoJ": HoJ,
         "maelstrom": maelstrom,
+        "eternal_flame": eternal_flame,
         "multi": multi,
         "BT_COST": BT_COST,
         "slam_COST": slam_COST,
@@ -1733,6 +1773,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "crusader_uptime_total": 0.0,
         "crusader_oh_uptime_total": 0.0,
         "Empyrian_Demolisher_uptime_total": 0.0,
+        "bonereavers_uptime_total": 0.0,
+        "eternal_flame_uptime_total": 0.0,
         "death_wish_uptime_total": 0.0,
         "all_attack_counts": [],
         "iterations_total": 0
@@ -1749,6 +1791,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         final_results["crusader_uptime_total"] += chunk["crusader_uptime_total"]
         final_results["crusader_oh_uptime_total"] += chunk["crusader_oh_uptime_total"]
         final_results["Empyrian_Demolisher_uptime_total"] += chunk["Empyrian_Demolisher_uptime_total"]
+        final_results["bonereavers_uptime_total"] += chunk["bonereavers_uptime_total"]
+        final_results["eternal_flame_uptime_total"] += chunk["eternal_flame_uptime_total"]
         final_results["death_wish_uptime_total"] += chunk["death_wish_uptime_total"]
         final_results["all_attack_counts"].extend(chunk["all_attack_counts"])
         final_results["iterations_total"] += chunk["iterations_chunk"]
@@ -1787,6 +1831,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "avg_crusader_uptime": final_results["crusader_uptime_total"]/iters,
         "avg_crusader_oh_uptime": final_results["crusader_oh_uptime_total"]/iters,
         "avg_Empyrian_Demolisher_uptime": final_results["Empyrian_Demolisher_uptime_total"]/iters,
+        "avg_bonereavers_uptime": final_results["bonereavers_uptime_total"]/iters,
+        "avg_eternal_flame_uptime": final_results["eternal_flame_uptime_total"]/iters,
         "all_attack_counts": final_results["all_attack_counts"],
         "avg_death_wish_uptime": final_results["death_wish_uptime_total"]/iters,
         "mean_Rend_dps": sum(final_results["results_rend"])/iters
