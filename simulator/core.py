@@ -375,6 +375,27 @@ class RagingBlowBuff:
         return self.stacks > 0
 
 # -------------------------
+# Mighty Rage Potion
+# -------------------------
+class MightyRagePotion:
+    def __init__(self, cooldown=60.0, duration=20.0, str_bonus=60, min_rage=45, max_rage=75):
+        self.cooldown = cooldown
+        self.duration = duration
+        self.str_bonus = str_bonus
+        self.min_rage = min_rage
+        self.max_rage = max_rage
+        self.next_available = 0.0
+
+    def try_use(self, state, time):
+        if time >= self.next_available:
+            rage_gain = random.randint(self.min_rage, self.max_rage)
+            state.rage = min(100, state.rage + rage_gain)
+            state.onhit_buffs.add_buff("Mighty Rage", "strength", self.str_bonus, self.duration, time)
+            self.next_available = time + self.cooldown
+            return True
+        return False
+
+# -------------------------
 # Fight State & Event Handlers
 # -------------------------
 
@@ -433,6 +454,7 @@ class FightState:
         self.bloodfury = Bloodfury(onhit_buffs=self.onhit_buffs)
         self.ambidextrous = Ambidextrous()
         self.rb_buff = RagingBlowBuff()
+        self.mighty_rage_potion = MightyRagePotion()
 
         self.titans_fury_dmg_buff_end_time = 0.0
         self.titans_fury_free_hs_stacks = 0
@@ -481,6 +503,14 @@ class FightState:
 
         # Uptime tracking
         self.flurry_time = 0.0
+
+        # Handle Pre-pull Potion
+        prepull = getattr(self, "mighty_rage_potion_prepull_time", 0.0)
+        if prepull > 0:
+            rage_gain = random.randint(45, 75)
+            self.rage = min(100, self.rage + rage_gain)
+            self.onhit_buffs.add_buff("Mighty Rage", "strength", 60, 20.0, -prepull)
+            self.mighty_rage_potion.next_available = 60.0 - prepull
 
     def next_id(self):
         self.event_id += 1
@@ -1269,6 +1299,13 @@ def _handle_tank_dummy(state, payload):
     if next_time <= state.fight_length:
         state.queue.put((next_time, state.next_id(), "Tank_dummy", False))
 
+def _handle_potion(state, payload):
+    if not state.mighty_rage_potion.try_use(state, state.time):
+        # Failed (likely on CD), reschedule for when available
+        next_time = state.mighty_rage_potion.next_available
+        if next_time <= state.fight_length:
+            state.queue.put((next_time, state.next_id(), "POTION", None))
+
 
 # -------------------------
 # Single fight simulation
@@ -1282,6 +1319,11 @@ def _run_single_fight(**kwargs):
     if state.tank_dummy:
         state.queue.put((0.05, state.next_id(), "Tank_dummy", False))
 
+    # Schedule Potion
+    pot_time = getattr(state, "mighty_rage_potion_time", -1.0)
+    if pot_time >= 0:
+        state.queue.put((pot_time, state.next_id(), "POTION", None))
+
     if state.dual_wield:
         state.queue.put((0.18, state.next_id(), "OH_SWING", False))
     
@@ -1291,6 +1333,7 @@ def _run_single_fight(**kwargs):
         "Extra_Attack": _handle_extra_attack,
         "GCD": _handle_gcd,
         "Tank_dummy": _handle_tank_dummy,
+        "POTION": _handle_potion,
     }
 
     while not state.queue.empty():
@@ -1738,6 +1781,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "here_comes_the_big_one": here_comes_the_big_one,
         "titans_fury": titans_fury,
         "mob_level": stats.get("mob_level", 63),
+        "mighty_rage_potion_time": stats.get("mighty_rage_potion_time", -1),
+        "mighty_rage_potion_prepull_time": stats.get("mighty_rage_potion_prepull_time", 0),
     }
 
     # Multiprocessing setup

@@ -120,6 +120,8 @@ class WarriorSimApp(tk.Tk):
         self.eternal_flame = tk.BooleanVar(value=False)
         self.bloodlust_time = tk.DoubleVar(value=1.0)
         self.bloodfury_time = tk.DoubleVar(value=1.0)
+        self.mighty_rage_potion_time = tk.DoubleVar(value=-1.0)
+        self.mighty_rage_potion_prepull_time = tk.DoubleVar(value=0.0)
         self.smf = tk.BooleanVar(value=True)
         self.tg = tk.BooleanVar(value=False)
         self.hunting_pack = tk.BooleanVar(value=False)
@@ -297,6 +299,13 @@ class WarriorSimApp(tk.Tk):
         ttk.Label(row, text="Bloodfury Time (s)").pack(side="left")
         ttk.Entry(row, textvariable=self.bloodfury_time, width=10).pack(side="left")
 
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Mighty Rage Time (s)").pack(side="left")
+        ttk.Entry(row, textvariable=self.mighty_rage_potion_time, width=10).pack(side="left")
+        ttk.Label(row, text="Pre-pull Pot (s)").pack(side="left")
+        ttk.Entry(row, textvariable=self.mighty_rage_potion_prepull_time, width=10).pack(side="left")
+
          # ---------- Main Hand Procs ----------
         mh_frame = ttk.LabelFrame(frame, text="Main Hand Procs")
         mh_frame.pack(fill="x", pady=4)
@@ -371,6 +380,8 @@ class WarriorSimApp(tk.Tk):
             stats["MH_procs"] = selected_MH_procs
             stats["OH_procs"] = selected_OH_procs
             stats["bloodlust_time"] = self.bloodlust_time.get()
+            stats["mighty_rage_potion_time"] = self.mighty_rage_potion_time.get()
+            stats["mighty_rage_potion_prepull_time"] = self.mighty_rage_potion_prepull_time.get()
     
             # Build priority list from integers
             prio_list = []

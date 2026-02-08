@@ -101,7 +101,7 @@ ALL_PROCS = {
         "ignore_if_active": False  # This triggers one extra MH swing
     },
     "Bonereavers Edge": {
-        "chance": 2,            #2 ppm?
+        "chance": 1.3,            #2 ppm?
         "arpen_rating_buff": 68,
         "duration": 10.0,
         "max_stacks": 3,
