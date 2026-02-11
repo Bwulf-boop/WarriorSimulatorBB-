@@ -68,21 +68,21 @@ class WarriorSimApp(tk.Tk):
         self.stats = {
             "strength": tk.DoubleVar(value=433),
             "Agility": tk.DoubleVar(value=121),
-            "attack_power": tk.DoubleVar(value=1515),
-            "crit": tk.DoubleVar(value=34.4),
+            "attack_power": tk.DoubleVar(value=1529),
+            "crit": tk.DoubleVar(value=34.42),
             "hit": tk.DoubleVar(value=8),
             "mh_expertise": tk.DoubleVar(value=26),
             "oh_expertise": tk.DoubleVar(value=26),
-            "Your_Armor": tk.DoubleVar(value=4234),
+            "Your_Armor": tk.DoubleVar(value=4272),
             "boss_armor": tk.DoubleVar(value=4200),
-            "armor_penetration": tk.DoubleVar(value=57),
-            "min_dmg": tk.DoubleVar(value=97),
-            "max_dmg": tk.DoubleVar(value=157),
-            "oh_min_dmg": tk.DoubleVar(value=100),
-            "oh_max_dmg": tk.DoubleVar(value=157),
+            "armor_penetration": tk.DoubleVar(value=73),
+            "min_dmg": tk.DoubleVar(value=103),
+            "max_dmg": tk.DoubleVar(value=167),
+            "oh_min_dmg": tk.DoubleVar(value=103),
+            "oh_max_dmg": tk.DoubleVar(value=167),
             "mh_expertise": tk.DoubleVar(value=26),
             "oh_expertise": tk.DoubleVar(value=26),
-            "haste": tk.DoubleVar(value=17),
+            "haste": tk.DoubleVar(value=8),
             "wf": tk.DoubleVar(value=200),
             "Add_Str": tk.DoubleVar(value=0),
             "Add_AP": tk.DoubleVar(value=0),
@@ -98,8 +98,11 @@ class WarriorSimApp(tk.Tk):
         self.ww_cost = tk.DoubleVar(value=25.0)
         self.mh_speed = tk.DoubleVar(value=2.6)
         self.oh_speed = tk.DoubleVar(value=2.7)
+        self.num_targets = tk.IntVar(value=1)
+        self.use_cleave = tk.BooleanVar(value=False)
         self.fight_length = tk.DoubleVar(value=140.0)
         self.iterations = tk.IntVar(value=5000)
+        self.gcd_delay = tk.DoubleVar(value=0.0)
         self.dual_wield = tk.BooleanVar(value=True)
         self.multi = tk.DoubleVar(value=1.0)
         self.battering_ram = tk.BooleanVar(value=True)
@@ -147,6 +150,7 @@ class WarriorSimApp(tk.Tk):
         self.raging_onslaught = tk.BooleanVar(value=False)
         self.here_comes_the_big_one = tk.BooleanVar(value=False)
         self.titans_fury = tk.BooleanVar(value=False)
+        self.cleaving_slam = tk.BooleanVar(value=False)
 
 
         # Weapon Proc Options
@@ -192,12 +196,20 @@ class WarriorSimApp(tk.Tk):
         ttk.Entry(row, textvariable=self.fight_length, width=10).pack(side="left")
         ttk.Label(row, text="Iterations").pack(side="left")
         ttk.Entry(row, textvariable=self.iterations, width=10).pack(side="left")
+        ttk.Label(row, text="GCD Delay").pack(side="left")
+        ttk.Entry(row, textvariable=self.gcd_delay, width=10).pack(side="left")
 
         row = ttk.Frame(frame)
         row.pack(fill="x", pady=2)
         ttk.Label(row, text="Damage Multiplier").pack(side="left")
         ttk.Entry(row, textvariable=self.multi, width=10).pack(side="left")
         # ---------- Checkbox Grid ----------
+
+        row = ttk.Frame(frame)
+        row.pack(fill="x", pady=2)
+        ttk.Label(row, text="Targets (1-4)").pack(side="left")
+        ttk.Entry(row, textvariable=self.num_targets, width=10).pack(side="left")
+        ttk.Checkbutton(row, text="Use Cleave (>1 Tgt)", variable=self.use_cleave).pack(side="left", padx=5)
         
         special_frame = ttk.Frame(frame)
         special_frame.pack(fill="x", pady=2)
@@ -261,6 +273,8 @@ class WarriorSimApp(tk.Tk):
             .grid(row=8, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Titans Fury", variable=self.titans_fury)\
             .grid(row=9, column=0, sticky="w", pady=2)
+        ttk.Checkbutton(checkbox_frame, text="Cleaving Slam", variable=self.cleaving_slam)\
+            .grid(row=10, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Tank dummy", variable=self.tank_dummy)\
             .grid(row=7, column=2, sticky="w", pady=2)
         
@@ -327,6 +341,7 @@ class WarriorSimApp(tk.Tk):
         self.white_MH_label = ttk.Label(parent, text="White MH DPS: -")
         self.white_OH_label = ttk.Label(parent, text="White OH DPS: -")
         self.hs_label = ttk.Label(parent, text="Heroic Strike DPS: -")
+        self.cleave_label = ttk.Label(parent, text="Cleave DPS: -")
         self.slam_MH_label = ttk.Label(parent, text="Slam MH DPS: -")
         self.slam_OH_label = ttk.Label(parent, text="Slam OH DPS: -")
         self.WW_label = ttk.Label(parent, text="WW DPS: -")
@@ -356,7 +371,7 @@ class WarriorSimApp(tk.Tk):
         self.avg_OH_label = ttk.Label(parent, text="Avg OH Damage:")
         self.avg_OH_value = ttk.Label(parent, textvariable=self.avg_oh_var)
 
-        for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label,
+        for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label, self.cleave_label,
                     self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.RB_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
                     self.bonereavers_label, self.eternal_flame_label,
@@ -397,6 +412,7 @@ class WarriorSimApp(tk.Tk):
                 mh_speed=self.mh_speed.get(),
                 oh_speed=self.oh_speed.get(),
                 fight_length=self.fight_length.get(),
+                gcd_delay=self.gcd_delay.get(),
                 stats=stats,
                 dual_wield=self.dual_wield.get(),
                 multi=self.multi.get(),
@@ -434,7 +450,10 @@ class WarriorSimApp(tk.Tk):
                 raging_onslaught=self.raging_onslaught.get(),
                 here_comes_the_big_one=self.here_comes_the_big_one.get(),
                 titans_fury=self.titans_fury.get(),
-                ability_priority=final_priority
+                cleaving_slam=self.cleaving_slam.get(),
+                ability_priority=final_priority,
+                num_targets=self.num_targets.get(),
+                use_cleave=self.use_cleave.get()
             )
             self._show_results(result)
             self.last_result = result
@@ -458,6 +477,7 @@ class WarriorSimApp(tk.Tk):
         self.slam_OH_label.config(text=f"Slam OH DPS: {result['mean_slam_OH_dps']:.1f}")
         self.ambi_label.config(text=f"AMbi Hit DPS: {result['mean_ambi_dps']:.1f}")
         self.hs_label.config(text=f"Heroic Strike DPS: {result['mean_hs_dps']:.1f}")
+        self.cleave_label.config(text=f"Cleave DPS: {result.get('mean_cleave_dps', 0):.1f}")
         self.WW_label.config(text=f"WW DPS: {result['mean_WW_dps']:.1f}")
         self.BT_label.config(text=f"BT DPS: {result['mean_BT_dps']:.1f}")
         self.DR_label.config(text=f"Dragon Roar DPS: {result.get('mean_DR_dps', 0):.1f}")
