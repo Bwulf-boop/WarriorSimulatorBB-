@@ -154,8 +154,8 @@ class WarriorSimApp(tk.Tk):
 
 
         # Weapon Proc Options
-        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge"]
+        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
+        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}

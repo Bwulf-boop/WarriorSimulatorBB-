@@ -439,6 +439,11 @@ class FightState:
         self.flurry_hits_remaining = 0
         self.last_event_time = 0.0
 
+        self.next_mh_swing = 0.0
+        self.next_oh_swing = 0.0
+        self.next_tank_dummy = 0.0
+        self.next_allowed_gcd = 0.0
+
         # Base stats and multipliers
         self.base_crit = self.crit
         self.current_total_ap = self.total_ap
@@ -1120,6 +1125,10 @@ GCD_ACTIONS = {
 }
 
 def _handle_gcd(state, payload):
+    if state.time < state.next_allowed_gcd:
+        state.queue.put((state.next_allowed_gcd, state.next_id(), "GCD", False))
+        return
+
     used_gcd = False
     for ability_name in state.ability_priority:
         action = GCD_ACTIONS.get(ability_name)
@@ -1127,7 +1136,40 @@ def _handle_gcd(state, payload):
             used_gcd = True
             break
 
-    next_time = state.time + (state.gcd + state.gcd_delay if used_gcd else 0.02)
+    if used_gcd:
+        state.next_allowed_gcd = state.time + state.gcd + state.gcd_delay
+        next_time = state.next_allowed_gcd
+    else:
+        events = [
+            state.WW_CD_UP,
+            state.BT_CD_UP,
+            state.DR_CD_UP,
+            state.RB_CD_UP,
+            state.Bloodrage_CD_UP,
+            state.BerserkerRage_CD_UP,
+            state.Recklessness_CD_UP,
+            state.death_wish.next_available,
+            state.next_mh_swing,
+        ]
+        if state.dual_wield:
+            events.append(state.next_oh_swing)
+        if state.tank_dummy:
+            events.append(state.next_tank_dummy)
+        
+        pot_time = getattr(state, "mighty_rage_potion_time", -1)
+        if pot_time > state.time:
+            events.append(pot_time)
+
+        future_events = [t for t in events if t > state.time]
+        
+        if future_events:
+            next_time = min(future_events)
+        else:
+            next_time = state.time + 0.1
+            
+        if next_time <= state.time:
+            next_time = state.time + 0.01
+
     if next_time <= state.fight_length:
         state.queue.put((next_time, state.next_id(), "GCD", False))
 
@@ -1265,6 +1307,7 @@ def _handle_mh_swing(state, payload):
             state.HS_queue = 0
         
         next_time = state.time + swing_speed
+        state.next_mh_swing = next_time
         if next_time <= state.fight_length:
             state.queue.put((next_time, state.next_id(), "MH_SWING", False))
     else:
@@ -1304,6 +1347,7 @@ def _handle_mh_swing(state, payload):
             state.HS_queue = 1
         
         next_time = state.time + swing_speed
+        state.next_mh_swing = next_time
         if next_time <= state.fight_length:
             state.queue.put((next_time, state.next_id(), "MH_SWING", False))
 
@@ -1352,6 +1396,7 @@ def _handle_oh_swing(state, payload):
     if state.rage >= _get_next_swing_cost(state):
         state.HS_queue = 1
     next_time = state.time + swing_speed
+    state.next_oh_swing = next_time
     if next_time <= state.fight_length:
         state.queue.put((next_time, state.next_id(), "OH_SWING", False))
 
@@ -1394,11 +1439,13 @@ def _handle_extra_attack(state, payload):
     # After generating rage, check if we can queue HS
     if state.rage >= _get_next_swing_cost(state):
         state.HS_queue = 1
+    state.queue.put((state.time, state.next_id(), "GCD", False))
 
 def _handle_tank_dummy(state, payload):
     state.rage += 60
     if state.rage > 100: state.rage = 100
     next_time = state.time + 1.5
+    state.next_tank_dummy = next_time
     if state.rage >= _get_next_swing_cost(state):
         state.HS_queue = 1
     if next_time <= state.fight_length:
@@ -1410,6 +1457,8 @@ def _handle_potion(state, payload):
         next_time = state.mighty_rage_potion.next_available
         if next_time <= state.fight_length:
             state.queue.put((next_time, state.next_id(), "POTION", None))
+    else:
+        state.queue.put((state.time, state.next_id(), "GCD", False))
 
 
 # -------------------------
@@ -1420,9 +1469,11 @@ def _run_single_fight(**kwargs):
 
     # Schedule first events
     state.queue.put((0, state.next_id(), "MH_SWING", False))
+    state.next_mh_swing = 0.0
     state.queue.put((0.1, state.next_id(), "GCD", False))
     if state.tank_dummy:
         state.queue.put((0.05, state.next_id(), "Tank_dummy", False))
+        state.next_tank_dummy = 0.05
 
     # Schedule Potion
     pot_time = getattr(state, "mighty_rage_potion_time", -1.0)
@@ -1431,6 +1482,7 @@ def _run_single_fight(**kwargs):
 
     if state.dual_wield:
         state.queue.put((0.18, state.next_id(), "OH_SWING", False))
+        state.next_oh_swing = 0.18
     
     event_handlers = {
         "MH_SWING": _handle_mh_swing,
