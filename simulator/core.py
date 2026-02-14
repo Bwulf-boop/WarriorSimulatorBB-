@@ -1557,6 +1557,8 @@ def _run_single_fight(**kwargs):
         #Calc haste before event
         proced_haste = state.haste + active_mods.get("haste", 0)
         state.current_haste = (state.FLURRY_MULT if state.flurry_hits_remaining > 0 else 1.0) * proced_haste * state.wf
+        if getattr(state, "swift_retribution", False):
+            state.current_haste *= 1.03
         state.current_haste *= (1 + state.bloodlust.get_bonus_haste())
 
         # Mh base dmg each start for wounds calc
@@ -1833,7 +1835,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False, eternal_flame=False,
                    multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0, smf=False, tg=False,
                    hunting_pack=False, retri_crit=False, starting_rage=50.0, dragon_roar=False, RB_COST=20.0, num_targets=1, use_cleave=False,
-                   dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False, titans_fury=False, cleaving_slam=False, gcd_delay=0.0):
+                   dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False, titans_fury=False, cleaving_slam=False, gcd_delay=0.0,
+                   swift_retribution=False, retri_dmg=False, mark_of_the_wild=False):
 
     if stats is None:
         stats = {}
@@ -1860,6 +1863,11 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     extra_ap = stats.get("Add_AP", 0)
     extra_crit = stats.get("Add_Crit", 0) / 100
 
+    if mark_of_the_wild:
+        extra_str += 16
+        extra_agi += 16
+        extra_ap += 10
+
     # Calculate the portion of AP that does NOT come from strength
     gear_ap = attack_power - base_ap - (strength * 2) - ap_from_armor
     total_ap_base = gear_ap + ap_from_armor + base_ap + extra_ap
@@ -1870,6 +1878,11 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
     crit_total = crit + extra_crit
     if retri_crit:
         crit_total += 0.03
+
+    haste_val = 1 + stats.get("haste", 0)/1000
+
+    if retri_dmg:
+        multi *= 1.03
 
     # Prepare fight arguments
     fight_kwargs = {
@@ -1889,6 +1902,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "oh_expertise": stats.get("oh_expertise", 0),
         "armor_penetration": stats.get("armor_penetration", 10)/5/100,
         "haste": 1 + stats.get("haste", 0)/1000,
+        "haste": haste_val,
         "wf": 1 + stats.get("wf", 0)/1000,
         "dual_wield": dual_wield,
         "battering_ram": battering_ram,
@@ -1947,6 +1961,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "num_targets": num_targets,
         "use_cleave": use_cleave,
         "cleaving_slam": cleaving_slam,
+        "swift_retribution": swift_retribution,
     }
 
     # Multiprocessing setup

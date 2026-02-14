@@ -132,6 +132,9 @@ class WarriorSimApp(tk.Tk):
         self.starting_rage = tk.DoubleVar(value=50.0)
         self.dragon_roar = tk.BooleanVar(value=False)
         self.dragon_warrior = tk.BooleanVar(value=False)
+        self.swift_retribution = tk.BooleanVar(value=False)
+        self.retri_dmg = tk.BooleanVar(value=False)
+        self.mark_of_the_wild = tk.BooleanVar(value=False)
         
         # Ability Priority Variables
         self.priority_vars = {}
@@ -263,6 +266,12 @@ class WarriorSimApp(tk.Tk):
             .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
             .grid(row=6, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Swift Retribution", variable=self.swift_retribution)\
+            .grid(row=7, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Retri Dmg", variable=self.retri_dmg)\
+            .grid(row=8, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Mark of the Wild", variable=self.mark_of_the_wild)\
+            .grid(row=9, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Power Slam", variable=self.power_slam)\
             .grid(row=5, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Bloodthirsty", variable=self.bloodthirsty)\
@@ -453,7 +462,10 @@ class WarriorSimApp(tk.Tk):
                 cleaving_slam=self.cleaving_slam.get(),
                 ability_priority=final_priority,
                 num_targets=self.num_targets.get(),
-                use_cleave=self.use_cleave.get()
+                use_cleave=self.use_cleave.get(),
+                swift_retribution=self.swift_retribution.get(),
+                retri_dmg=self.retri_dmg.get(),
+                mark_of_the_wild=self.mark_of_the_wild.get()
             )
             self._show_results(result)
             self.last_result = result
