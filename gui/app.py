@@ -127,14 +127,15 @@ class WarriorSimApp(tk.Tk):
         self.mighty_rage_potion_prepull_time = tk.DoubleVar(value=0.0)
         self.smf = tk.BooleanVar(value=True)
         self.tg = tk.BooleanVar(value=False)
-        self.hunting_pack = tk.BooleanVar(value=False)
+        self.ferocious_inspiration = tk.BooleanVar(value=False)
         self.retri_crit = tk.BooleanVar(value=False)
         self.starting_rage = tk.DoubleVar(value=50.0)
         self.dragon_roar = tk.BooleanVar(value=False)
         self.dragon_warrior = tk.BooleanVar(value=False)
         self.swift_retribution = tk.BooleanVar(value=False)
-        self.retri_dmg = tk.BooleanVar(value=False)
+        self.battle_squawk = tk.BooleanVar(value=False)
         self.mark_of_the_wild = tk.BooleanVar(value=False)
+        self.blood_frenzy = tk.BooleanVar(value=False)
         
         # Ability Priority Variables
         self.priority_vars = {}
@@ -158,7 +159,7 @@ class WarriorSimApp(tk.Tk):
 
         # Weapon Proc Options
         self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
+        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe OH", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -212,7 +213,7 @@ class WarriorSimApp(tk.Tk):
         row.pack(fill="x", pady=2)
         ttk.Label(row, text="Targets (1-4)").pack(side="left")
         ttk.Entry(row, textvariable=self.num_targets, width=10).pack(side="left")
-        ttk.Checkbutton(row, text="Use Cleave (>1 Tgt)", variable=self.use_cleave).pack(side="left", padx=5)
+        ttk.Checkbutton(row, text="Use Cleave", variable=self.use_cleave).pack(side="left", padx=5)
         
         special_frame = ttk.Frame(frame)
         special_frame.pack(fill="x", pady=2)
@@ -262,16 +263,18 @@ class WarriorSimApp(tk.Tk):
             .grid(row=4, column=2, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Eternal Flame", variable=self.eternal_flame)\
             .grid(row=5, column=2, sticky="w", pady=2, padx=(20, 0))
-        ttk.Checkbutton(checkbox_frame, text="Ferocious Inspiration", variable=self.hunting_pack)\
+        ttk.Checkbutton(checkbox_frame, text="Ferocious Inspiration", variable=self.ferocious_inspiration)\
             .grid(row=5, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Retri Crit", variable=self.retri_crit)\
             .grid(row=6, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Swift Retribution", variable=self.swift_retribution)\
             .grid(row=7, column=1, sticky="w", pady=2, padx=(20, 0))
-        ttk.Checkbutton(checkbox_frame, text="Retri Dmg", variable=self.retri_dmg)\
+        ttk.Checkbutton(checkbox_frame, text="Battle Squawk", variable=self.battle_squawk)\
             .grid(row=8, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Mark of the Wild", variable=self.mark_of_the_wild)\
             .grid(row=9, column=1, sticky="w", pady=2, padx=(20, 0))
+        ttk.Checkbutton(checkbox_frame, text="Blood Frenzy", variable=self.blood_frenzy)\
+            .grid(row=10, column=1, sticky="w", pady=2, padx=(20, 0))
         ttk.Checkbutton(checkbox_frame, text="Power Slam", variable=self.power_slam)\
             .grid(row=5, column=0, sticky="w", pady=2)
         ttk.Checkbutton(checkbox_frame, text="Bloodthirsty", variable=self.bloodthirsty)\
@@ -447,7 +450,7 @@ class WarriorSimApp(tk.Tk):
                 HS_COST=self.HS_cost.get(),
                 smf=self.smf.get(),
                 tg=self.tg.get(),
-                hunting_pack=self.hunting_pack.get(),
+                ferocious_inspiration=self.ferocious_inspiration.get(),
                 retri_crit=self.retri_crit.get(),
                 starting_rage=self.starting_rage.get(),
                 dragon_roar=self.dragon_roar.get(),
@@ -464,8 +467,9 @@ class WarriorSimApp(tk.Tk):
                 num_targets=self.num_targets.get(),
                 use_cleave=self.use_cleave.get(),
                 swift_retribution=self.swift_retribution.get(),
-                retri_dmg=self.retri_dmg.get(),
-                mark_of_the_wild=self.mark_of_the_wild.get()
+                battle_squawk=self.battle_squawk.get(),
+                mark_of_the_wild=self.mark_of_the_wild.get(),
+                blood_frenzy=self.blood_frenzy.get()
             )
             self._show_results(result)
             self.last_result = result

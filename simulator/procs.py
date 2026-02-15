@@ -39,6 +39,11 @@ ALL_PROCS = {
         "mh_extra_hit": True,
         "ignore_if_active": False  # This triggers one extra MH swing
     },
+    "Flurry Axe OH": {
+        "chance": 3,   # 13% per main-hand hit
+        "mh_extra_hit": True,
+        "ignore_if_active": False  # This triggers one extra MH swing
+    },
     "Wound": {
         "chance": 2,           #
         "ap_based": True,          # flag to scale with AP

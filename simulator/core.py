@@ -1185,7 +1185,7 @@ def _handle_mh_swing(state, payload):
 
     cost = _get_next_swing_cost(state)
     if state.HS_queue == 1 and state.rage >= cost:
-        is_cleave = getattr(state, "use_cleave", False) and state.num_targets > 1
+        is_cleave = getattr(state, "use_cleave", False)
         
         if is_cleave:
             # --- CLEAVE LOGIC ---
@@ -1559,6 +1559,8 @@ def _run_single_fight(**kwargs):
         state.current_haste = (state.FLURRY_MULT if state.flurry_hits_remaining > 0 else 1.0) * proced_haste * state.wf
         if getattr(state, "swift_retribution", False):
             state.current_haste *= 1.03
+        if getattr(state, "battle_squawk", False):
+            state.current_haste *= 1.05
         state.current_haste *= (1 + state.bloodlust.get_bonus_haste())
 
         # Mh base dmg each start for wounds calc
@@ -1579,7 +1581,8 @@ def _run_single_fight(**kwargs):
         state.multi *= state.SMF
         if getattr(state, "tg", False):
             state.multi *= 0.954
-        state.multi *= getattr(state, "hunting_pack", 1.0)
+        state.multi *= getattr(state, "ferocious_inspiration", 1.0)
+        state.multi *= getattr(state, "blood_frenzy", 1.0)
         if getattr(state, "heavy_weight", False):
             state.multi *= 1.06
         if getattr(state, "titans_fury", False) and state.time < state.titans_fury_dmg_buff_end_time:
@@ -1834,9 +1837,9 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
                    kings=False, str_earth=False, shamanistic_rage=False, outrage=False,
                    bashguuder=False, faeri=False, sunders=False, icon=False, trauma=False, HoJ=False, maelstrom=False, eternal_flame=False,
                    multi=1.0, BT_COST=30.0, slam_COST=15.0, ww_COST=25.0, HS_COST=15.0, smf=False, tg=False,
-                   hunting_pack=False, retri_crit=False, starting_rage=50.0, dragon_roar=False, RB_COST=20.0, num_targets=1, use_cleave=False,
+                   ferocious_inspiration=False, retri_crit=False, starting_rage=50.0, dragon_roar=False, RB_COST=20.0, num_targets=1, use_cleave=False,
                    dragon_warrior=False, raging_blow=False, heavy_weight=False, power_slam=False, bloodthirsty=False, raging_onslaught=False, here_comes_the_big_one=False, titans_fury=False, cleaving_slam=False, gcd_delay=0.0,
-                   swift_retribution=False, retri_dmg=False, mark_of_the_wild=False):
+                   swift_retribution=False, battle_squawk=False, mark_of_the_wild=False, blood_frenzy=False):
 
     if stats is None:
         stats = {}
@@ -1880,9 +1883,6 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         crit_total += 0.03
 
     haste_val = 1 + stats.get("haste", 0)/1000
-
-    if retri_dmg:
-        multi *= 1.03
 
     # Prepare fight arguments
     fight_kwargs = {
@@ -1945,7 +1945,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "SMF": 1.05 if smf else 1.0,
         "smf": smf,
         "tg": tg,
-        "hunting_pack": 1.03 if hunting_pack else 1.0,
+        "ferocious_inspiration": 1.03 if ferocious_inspiration else 1.0,
         "dragon_roar": dragon_roar,
         "dragon_warrior": dragon_warrior,
         "raging_blow": raging_blow,
@@ -1962,6 +1962,8 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "use_cleave": use_cleave,
         "cleaving_slam": cleaving_slam,
         "swift_retribution": swift_retribution,
+        "battle_squawk": battle_squawk,
+        "blood_frenzy": 1.04 if blood_frenzy else 1.0,
     }
 
     # Multiprocessing setup
