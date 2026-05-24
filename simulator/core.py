@@ -598,7 +598,7 @@ def _handle_procs(triggered, state):
     return dmg * state.multi
 
 def _get_next_swing_cost(state):
-    if getattr(state, "use_cleave", False) and state.num_targets > 1:
+    if getattr(state, "use_cleave", False):
         return 15.0 if getattr(state, "cleaving_slam", False) else 20.0
     if getattr(state, "titans_fury", False) and state.titans_fury_free_hs_stacks > 0:
         return 0.0
@@ -614,6 +614,7 @@ def _cast_death_wish(state):
     return False
 
 def _cast_instant_slam(state):
+    cleaving_slam_used=0
     if state.rage >= state.slam_COST and state.slam_proc >= 1:
         state.slam_proc = 0
         
@@ -621,6 +622,7 @@ def _cast_instant_slam(state):
         targets_to_hit = 1
         if getattr(state, "cleaving_slam", False) and state.cleaving_slam_stacks > 0 and state.num_targets > 1:
             state.cleaving_slam_stacks -= 1
+            cleaving_slam_used=1
             targets_to_hit = 2
         
         hits_processed = min(state.num_targets, targets_to_hit)
@@ -703,9 +705,9 @@ def _cast_instant_slam(state):
                     state.enrage.trigger(state.time)
                     state.slam_proc = 1
     
-        state.rage -= state.slam_COST
-        if state.rage < state.HS_COST:
-            state.HS_queue = 0
+        if not cleaving_slam_used:
+            state.rage -= state.slam_COST
+        cleaving_slam_used = 0    
         return True
     return False
 
@@ -741,13 +743,13 @@ def _cast_bt(state):
             state.crit_counts["BT_CRIT"] += 1
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
             state.flurry_hits_remaining = 3
+            
+            if getattr(state, "raging_onslaught", False):
+                state.rb_buff.add_stack()
         state.total_damage += dmg
         state.BT_damage += dmg
         state.attack_counts["BT"] += 1
         
-        if getattr(state, "raging_onslaught", False):
-            if random.random() < 0.5:
-                state.rb_buff.add_stack()
 
         triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
         apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
@@ -760,8 +762,6 @@ def _cast_bt(state):
         if random.random() < proc_chance: state.slam_proc = 1
 
         state.rage -= state.BT_COST
-        if state.rage < _get_next_swing_cost(state):
-            state.HS_queue = 0
         state.BT_CD_UP = state.time + 6.0
         return True
     return False
@@ -854,9 +854,6 @@ def _cast_ww(state):
 
         state.rage -= state.ww_COST
         
-        if state.rage < _get_next_swing_cost(state):
-            state.HS_queue = 0
-        
         ww_cd = 6.0 if getattr(state, "dragon_roar", False) else 8.0
         state.WW_CD_UP = state.time + ww_cd
 
@@ -886,6 +883,11 @@ def _cast_dragon_roar(state):
             base_dmg = state.current_total_ap * 0.7 + 765
             DR = _calc_dr(state.armor, state.armor_penetration, state.mob_level)
             dmg = base_dmg * (1 - DR) * state.multi
+            triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
+            apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
+            proc_dmg = _handle_procs(triggered, state)
+            state.proc_damage_count += proc_dmg
+            state.total_damage += proc_dmg
             
             if outcome == "CRIT":
                 dmg *= 2.2
@@ -920,28 +922,42 @@ def _cast_dragon_roar(state):
 
 def _cast_hard_slam(state):
     if state.rage >= state.slam_COST:
+        cleaving_slam_used=0
         slam_cast_time = 1.5
         state.slam_lockout_until = state.time + slam_cast_time
         
-        outcome = _roll_attack_outcome(state, "YELLOW", False)
-        if outcome in ["MISS", "DODGE"]:
-            state.rage -= state.slam_COST * 0.2
-            if outcome == "MISS": state.miss_counts["SLAM_MH_MISS"] += 1
-            if outcome == "DODGE": state.dodge_counts["SLAM_MH_DODGE"] += 1
-            state.attack_counts["SLAM_MH"] += 1
-            return True
 
-        dmg, crit_flag, proc_flag = _resolve_slam_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False), outcome=outcome)
-        dmg *= state.undending_fury
-        state.total_damage += dmg
-        state.slam_damage_MH += dmg
-        state.attack_counts["SLAM_MH"] += 1
+        targets_to_hit = 1
+        if getattr(state, "cleaving_slam", False) and state.cleaving_slam_stacks > 0 and state.num_targets > 1:
+            state.cleaving_slam_stacks -= 1
+            cleaving_slam_used=1
+            targets_to_hit = 2
         
-        if dmg > 0:
+        hits_processed = min(state.num_targets, targets_to_hit)
+        mh_hit_success = False
+
+        for i in range(hits_processed):
+            outcome = _roll_attack_outcome(state, "YELLOW", False)
+            if outcome in ["MISS", "DODGE"]:
+                if i == 0: # Primary target miss
+                    state.rage -= state.slam_COST * 0.2 # Refund 80%
+                    if outcome == "MISS": state.miss_counts["SLAM_MH_MISS"] += 1
+                    if outcome == "DODGE": state.dodge_counts["SLAM_MH_DODGE"] += 1
+                    state.attack_counts["SLAM_MH"] += 1
+                    return True # Stop if primary misses
+                continue # Secondary miss, continue
+
+            mh_hit_success = True
+            dmg, crit_flag, proc_flag = _resolve_slam_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False), outcome=outcome)
+            dmg *= state.undending_fury
+            state.total_damage += dmg
+            state.slam_damage_MH += dmg
+            state.attack_counts["SLAM_MH"] += 1
             if crit_flag:
                 state.crit_counts["SLAM_MH_CRIT"] += 1
                 state.deep_wounds.trigger(state.time, state.mh_base_avg)
                 state.flurry_hits_remaining = 3
+            
             triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
             apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
             proc_dmg = _handle_procs(triggered, state)
@@ -955,47 +971,52 @@ def _cast_hard_slam(state):
                 state.proc_damage_count += proc_dmg
                 state.total_damage += proc_dmg
 
-            if state.skull_cracker:
+            if i == 0 and dmg > 0 and state.skull_cracker:
                 state.death_wish.next_available = max(state.time, state.death_wish.next_available - 4.0)
-        
-        if proc_flag:
-            state.enrage.trigger(state.time)
-            state.slam_proc = 1
-        if state.smf:
-            outcome_oh = _roll_attack_outcome(state, "YELLOW", True)
-            if outcome_oh in ["MISS", "DODGE"]:
-                if outcome_oh == "MISS": state.miss_counts["SLAM_OH_MISS"] += 1
-                if outcome_oh == "DODGE": state.dodge_counts["SLAM_OH_DODGE"] += 1
+
+            if proc_flag:
+                state.enrage.trigger(state.time)
+                state.slam_proc = 1
+
+        # Offhand
+        if state.smf and mh_hit_success:
+            for i in range(hits_processed):
+                outcome_oh = _roll_attack_outcome(state, "YELLOW", True)
+                if outcome_oh in ["MISS", "DODGE"]:
+                    if outcome_oh == "MISS": state.miss_counts["SLAM_OH_MISS"] += 1
+                    if outcome_oh == "DODGE": state.dodge_counts["SLAM_OH_DODGE"] += 1
+                    state.attack_counts["SLAM_OH"] += 1
+                    continue
+
+                dmg, crit_flag, proc_flag = _resolve_slam_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False), outcome=outcome_oh)
+                dmg *= state.undending_fury
+                state.total_damage += dmg
+                state.slam_damage_OH += dmg
                 state.attack_counts["SLAM_OH"] += 1
-                return True
-
-            dmg, crit_flag, proc_flag = _resolve_slam_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False), outcome=outcome_oh)
-            dmg *= state.undending_fury
-            state.total_damage += dmg
-            state.slam_damage_OH += dmg
-            state.attack_counts["SLAM_OH"] += 1
-
-            if dmg > 0:
                 if crit_flag:
                     state.crit_counts["SLAM_OH_CRIT"] += 1
                     state.deep_wounds.trigger(state.time, state.oh_base_avg)
                     state.flurry_hits_remaining = 3
-            triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
-            apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
-            proc_dmg = _handle_procs(triggered, state)
-            state.proc_damage_count += proc_dmg
-            state.total_damage += proc_dmg
-
-            if state.battering_ram:
-                triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.sunder_procs, cooldowns=state.proc_cooldowns)
+                triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.OH_PROCS, cooldowns=state.proc_cooldowns)
                 apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
                 proc_dmg = _handle_procs(triggered, state)
                 state.proc_damage_count += proc_dmg
                 state.total_damage += proc_dmg
+                if state.battering_ram:
+                    triggered = resolve_on_hit_procs(state.time, state.oh_speed, procs_to_check=state.sunder_procs, cooldowns=state.proc_cooldowns)
+                    apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
+                    proc_dmg = _handle_procs(triggered, state)
+                    state.proc_damage_count += proc_dmg
+                    state.total_damage += proc_dmg
+    
+                if proc_flag:
+                    state.enrage.trigger(state.time)
+                    state.slam_proc = 1
+    
+        if not cleaving_slam_used:
+            state.rage -= state.slam_COST
+        cleaving_slam_used = 0    
 
-        state.rage -= state.slam_COST
-        if state.rage < _get_next_swing_cost(state):
-            state.HS_queue = 0
         return True
     return False
 
@@ -1037,7 +1058,7 @@ def _cast_raging_blow(state):
         state.rb_buff.consume_stack()
     else:
         state.rage -= state.RB_COST
-        state.RB_CD_UP = state.time + 10.0
+        state.RB_CD_UP = state.time + 8.0
 
     norm_speed = 3.3 if getattr(state, "tg", False) else 2.4
 
@@ -1059,10 +1080,10 @@ def _cast_raging_blow(state):
         state.attack_counts["RB"] += 1
         return True
 
-    # MH Strike (180% damage)
+    # MH Strike (175% damage)
     dmg_mh = 0.0
     if not mh_missed:
-        dmg_mh, _, _ = _resolve_swing_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi * 1.8, outcome=outcome_mh)
+        dmg_mh, _, _ = _resolve_swing_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi * 1.75, outcome=outcome_mh)
         if outcome_mh == "CRIT":
             state.deep_wounds.trigger(state.time, state.mh_base_avg)
             state.flurry_hits_remaining = 3
@@ -1070,7 +1091,7 @@ def _cast_raging_blow(state):
     # OH Strike (180% damage)
     dmg_oh = 0.0
     if state.dual_wield and not oh_missed:
-        dmg_oh, _, _ = _resolve_swing_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi_oh * 1.8, outcome=outcome_oh)
+        dmg_oh, _, _ = _resolve_swing_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, norm_speed, state.mob_level, multi=state.multi_oh * 1.75, outcome=outcome_oh)
         if outcome_oh == "CRIT":
             state.deep_wounds.trigger(state.time, state.oh_base_avg)
             state.flurry_hits_remaining = 3
@@ -1189,7 +1210,6 @@ def _handle_mh_swing(state, payload):
         
         if is_cleave:
             # --- CLEAVE LOGIC ---
-            state.HS_queue = 0
             targets = min(state.num_targets, 3)
             
             # Consume Rage immediately for Cleave? Usually on hit, but for simplicity we deduct if at least one hits or we just deduct.
@@ -1220,14 +1240,11 @@ def _handle_mh_swing(state, payload):
                     state.flurry_hits_remaining = 3
                 
                 total_cleave_dmg += dmg
-                
-                # Procs on primary target only
-                if i == 0:
-                    triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
-                    apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
-                    proc_dmg = _handle_procs(triggered, state)
-                    state.proc_damage_count += proc_dmg
-                    state.total_damage += proc_dmg
+                triggered = resolve_on_hit_procs(state.time, state.mh_speed, procs_to_check=state.MH_PROCS, cooldowns=state.proc_cooldowns)
+                apply_on_hit_procs(triggered, state.time, state.onhit_buffs)
+                proc_dmg = _handle_procs(triggered, state)
+                state.proc_damage_count += proc_dmg
+                state.total_damage += proc_dmg
             
             if any_hit:
                 state.rage -= cost
@@ -1238,10 +1255,10 @@ def _handle_mh_swing(state, payload):
                 state.cleaving_slam_stacks = min(state.cleaving_slam_stacks + 1, 3)
 
             state.attack_counts["CLEAVE"] += 1
+            state.HS_queue = 0
             
         else:
             # --- HEROIC STRIKE LOGIC ---
-            state.HS_queue = 0 # Consume the queue
             hs_base = random.randint(int(state.min_dmg), int(state.max_dmg)) + 201 + state.current_total_ap / 14 * state.mh_speed
 
             outcome = _roll_attack_outcome(state, "YELLOW", False, bonus_crit=0.15)
@@ -1302,6 +1319,7 @@ def _handle_mh_swing(state, payload):
                 state.total_damage += ambi_dmg
                 state.total_ambi += ambi_dmg
                 state.ambidextrous.trigger(state.time)
+        state.HS_queue = 0
 
         if state.rage < _get_next_swing_cost(state):
             state.HS_queue = 0
@@ -1339,7 +1357,7 @@ def _handle_mh_swing(state, payload):
             state.proc_damage_count += proc_dmg
             state.total_damage += proc_dmg
 
-        state.rage += _generate_rage_classic(dmg, state.mh_speed, offhand=False, is_crit=was_crit)
+        state.rage += _generate_rage_classic(dmg, state.mh_speed, offhand=False, is_crit=was_crit, is_tg=getattr(state, "tg", False))
         if state.rage > 100.0: state.rage = 100.0
 
         # After generating rage, check if we can queue HS
@@ -1389,7 +1407,7 @@ def _handle_oh_swing(state, payload):
         state.proc_damage_count += proc_dmg
         state.total_damage += proc_dmg
 
-    state.rage += _generate_rage_classic(dmg, state.oh_speed, offhand=True, is_crit=was_crit)
+    state.rage += _generate_rage_classic(dmg, state.oh_speed, offhand=True, is_crit=was_crit, is_tg=getattr(state, "tg", False))
     if state.rage > 100.0: state.rage = 100.0
 
     # After generating rage, check if we can queue HS
@@ -1433,7 +1451,7 @@ def _handle_extra_attack(state, payload):
         state.total_damage += proc_dmg
         state.proc_damage_count += proc_dmg
 
-    state.rage += _generate_rage_classic(dmg, state.mh_speed, offhand=False, is_crit=was_crit)
+    state.rage += _generate_rage_classic(dmg, state.mh_speed, offhand=False, is_crit=was_crit, is_tg=getattr(state, "tg", False))
     if state.rage > 100.0: state.rage = 100.0
 
     # After generating rage, check if we can queue HS
@@ -1540,7 +1558,7 @@ def _run_single_fight(**kwargs):
             state.crit += ((state.agility + 88) * 1.1 / 20 / 100)
         elif state.kings:
             current_strength = state.strength * 1.1
-            state.crit += (state.agility / 20 / 100)
+            state.crit += ((state.agility * 1.1) / 20 / 100)
         elif state.str_earth:
             current_strength = state.strength + 88 * 1.2
             state.crit += ((state.agility + 88) / 20 / 100)
@@ -1713,9 +1731,12 @@ def _calc_dr(armor, armor_penetration, mob_level):
     DR = min(DR, 0.75)
     return DR * (1 - min(armor_penetration, 1.0))
 
-def _generate_rage_classic(damage, weapon_speed, offhand=False, is_crit=False):
+def _generate_rage_classic(damage, weapon_speed, offhand=False, is_crit=False, is_tg=False):
     c = 230.6
-    f = 6 if offhand and is_crit else 3 if offhand else 14 if is_crit else 7
+    if is_tg:
+        f = 9 if offhand and is_crit else 4.5 if offhand else 18 if is_crit else 9
+    else:
+        f = 6 if offhand and is_crit else 3 if offhand else 14 if is_crit else 7
     rage = (15 * damage) / (4 * c) + (f * weapon_speed) / 2
     max_rage = (15 * damage) / c
     if damage == 0:
