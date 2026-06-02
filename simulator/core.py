@@ -507,7 +507,6 @@ class FightState:
         if self.bashguuder: self.armor_penetration += 0.18
         self.base_armor_penetration = self.armor_penetration
         self.enrage_multi = 1.1 * 1.05 if self.outrage else 1.1
-        print(self.armor_penetration)
 
         # Uptime tracking
         self.flurry_time = 0.0
