@@ -158,8 +158,8 @@ class WarriorSimApp(tk.Tk):
 
 
         # Weapon Proc Options
-        self.MH_PROC_OPTIONS = ["Crusader","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
-        self.OH_PROC_OPTIONS = ["Crusader_OH", "Brutal_OH", "Flurry Axe OH", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
+        self.MH_PROC_OPTIONS = ["Shadow_oil","Brutal", "Flurry Axe", "Empyrian Demolisher", "Wound", "Rend Garg", "DB", "Ironfoe", "Bonereavers Edge", "TF", "Claw"]
+        self.OH_PROC_OPTIONS = ["Shadow_oil", "Brutal_OH", "Flurry Axe OH", "Rend Garg","Empyrian Demolisher", "Wound", "DB", "Ironfoe", "Bonereavers Edge", "TF"]
 
         # Track checkbox selections
         self.MH_proc_vars = {proc: tk.IntVar(value=0) for proc in self.MH_PROC_OPTIONS}
@@ -366,6 +366,7 @@ class WarriorSimApp(tk.Tk):
         self.crusader_label = ttk.Label(parent, text="Crusader uptime: -")
         self.crusader_oh_label = ttk.Label(parent, text="Crusader oh uptime: -")
         self.Empyrian_Demolisher_label = ttk.Label(parent, text="Empyrian Demolisher uptime: -")
+        self.Claw_label = ttk.Label(parent, text="Claw uptime: -")
         self.bonereavers_label = ttk.Label(parent, text="Bonereavers Edge uptime: -")
         self.eternal_flame_label = ttk.Label(parent, text="Eternal Flame uptime: -")
         self.dw_label = ttk.Label(parent, text="Deep Wounds DPS: -")
@@ -386,7 +387,7 @@ class WarriorSimApp(tk.Tk):
         for lbl in [self.prev_mean_label,self.mean_label, self.white_MH_label, self.white_OH_label, self.hs_label, self.cleave_label,
                     self.slam_MH_label, self.slam_OH_label, self.WW_label, self.BT_label, self.DR_label, self.RB_label, self.ambi_label,
                     self.flurry_label, self.enrage_label, self.crusader_label, self.crusader_oh_label, self.Empyrian_Demolisher_label,
-                    self.bonereavers_label, self.eternal_flame_label,
+                    self.bonereavers_label, self.eternal_flame_label,self.Claw_label,
                     self.dw_label, self.rend_label, self.dmg_proc_label,
                     self.avg_MH_label, self.avg_MH_value, self.avg_OH_label, self.avg_OH_value]:
             lbl.pack(anchor="w", pady=1)
@@ -503,6 +504,7 @@ class WarriorSimApp(tk.Tk):
         self.crusader_label.config(text=f"Crusader uptime: {result['avg_crusader_uptime']*100:.1f}%")
         self.crusader_oh_label.config(text=f"Crusader OH uptime: {result['avg_crusader_oh_uptime']*100:.1f}%")
         self.Empyrian_Demolisher_label.config(text=f"Empyrian Demolisher uptime: {result['avg_Empyrian_Demolisher_uptime']*100:.1f}%")
+        self.Claw_label.config(text=f"Claw uptime: {result['avg_Claw_uptime']*100:.1f}%")
         self.bonereavers_label.config(text=f"Bonereavers Edge uptime: {result['avg_bonereavers_uptime']*100:.1f}%")
         self.eternal_flame_label.config(text=f"Eternal Flame uptime: {result['avg_eternal_flame_uptime']*100:.1f}%")
         self.avg_mh_var.set(f"{result.get('mean_avg_MH_dmg', 0):.1f}")

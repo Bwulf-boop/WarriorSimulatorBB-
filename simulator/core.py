@@ -500,13 +500,14 @@ class FightState:
         # Armor and enrage setup
         if not hasattr(self, 'mob_level'): self.mob_level = 63
         if not hasattr(self, 'armor'): self.armor = 4644
-        if self.bashguuder: self.armor -= 668
-        if self.sunders: self.armor *= 0.8
-        if self.faeri: self.armor *= 0.95
         if not hasattr(self, 'armor_penetration'): self.armor_penetration = 0.0
-        if self.battering_ram: self.armor_penetration += 0.025
+        if self.sunders: self.armor_penetration += 0.2
+        if self.faeri: self.armor_penetration += 0.05
+        if self.battering_ram: self.armor_penetration += 0.05
+        if self.bashguuder: self.armor_penetration += 0.18
         self.base_armor_penetration = self.armor_penetration
         self.enrage_multi = 1.1 * 1.05 if self.outrage else 1.1
+        print(self.armor_penetration)
 
         # Uptime tracking
         self.flurry_time = 0.0
@@ -923,8 +924,6 @@ def _cast_dragon_roar(state):
 def _cast_hard_slam(state):
     if state.rage >= state.slam_COST:
         cleaving_slam_used=0
-        slam_cast_time = 1.5
-        state.slam_lockout_until = state.time + slam_cast_time
         
 
         targets_to_hit = 1
@@ -950,6 +949,7 @@ def _cast_hard_slam(state):
             mh_hit_success = True
             dmg, crit_flag, proc_flag = _resolve_slam_damage(state.min_dmg, state.max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.mh_speed, False, state.mob_level, multi=state.multi, power_slam=getattr(state, "power_slam", False), outcome=outcome)
             dmg *= state.undending_fury
+            dmg*=0.5
             state.total_damage += dmg
             state.slam_damage_MH += dmg
             state.attack_counts["SLAM_MH"] += 1
@@ -990,6 +990,7 @@ def _cast_hard_slam(state):
 
                 dmg, crit_flag, proc_flag = _resolve_slam_damage(state.oh_min_dmg, state.oh_max_dmg, state.current_total_ap, state.armor, state.armor_penetration, state.oh_speed, True, state.mob_level, multi=state.multi_oh, power_slam=getattr(state, "power_slam", False), outcome=outcome_oh)
                 dmg *= state.undending_fury
+                dmg*=0.5
                 state.total_damage += dmg
                 state.slam_damage_OH += dmg
                 state.attack_counts["SLAM_OH"] += 1
@@ -1629,6 +1630,7 @@ def _run_single_fight(**kwargs):
     crusader_uptime = state.onhit_buffs.get_uptime("Crusader", state.fight_length) + state.onhit_buffs.get_uptime("Brutal", state.fight_length)
     crusader_oh_uptime = state.onhit_buffs.get_uptime("Crusader_OH", state.fight_length) + state.onhit_buffs.get_uptime("Brutal_OH", state.fight_length)
     Empyrian_Demolisher_uptime = state.onhit_buffs.get_uptime("Empyrian Demolisher", state.fight_length)
+    Claw_uptime = state.onhit_buffs.get_uptime("Claw", state.fight_length)
     bonereavers_uptime = state.onhit_buffs.get_uptime("Bonereavers Edge", state.fight_length)
     eternal_flame_uptime = state.onhit_buffs.get_uptime("Eternal Flame", state.fight_length)
 
@@ -1664,6 +1666,7 @@ def _run_single_fight(**kwargs):
         "crusader_uptime": crusader_uptime,
         "crusader_oh_uptime": crusader_oh_uptime,
         "Empyrian_Demolisher_uptime": Empyrian_Demolisher_uptime,
+        "Claw_uptime": Claw_uptime,
         "bonereavers_uptime": bonereavers_uptime,
         "eternal_flame_uptime": eternal_flame_uptime,
         "death_wish_uptime": state.death_wish.total_uptime / state.fight_length,
@@ -1783,6 +1786,7 @@ def _worker(args):
     crusader_uptime_total = 0.0
     crusader_oh_uptime_total = 0.0
     Empyrian_Demolisher_uptime_total = 0.0
+    Claw_uptime_total = 0.0
     bonereavers_uptime_total = 0.0
     eternal_flame_uptime_total = 0.0
     death_wish_uptime_total = 0.0
@@ -1814,6 +1818,7 @@ def _worker(args):
         crusader_uptime_total += fight["crusader_uptime"]
         crusader_oh_uptime_total += fight["crusader_oh_uptime"]
         Empyrian_Demolisher_uptime_total += fight["Empyrian_Demolisher_uptime"]
+        Claw_uptime_total += fight["Claw_uptime"]
         bonereavers_uptime_total += fight["bonereavers_uptime"]
         eternal_flame_uptime_total += fight["eternal_flame_uptime"]
         death_wish_uptime_total += fight["death_wish_uptime"]
@@ -1842,6 +1847,7 @@ def _worker(args):
         "crusader_uptime_total": crusader_uptime_total,
         "crusader_oh_uptime_total": crusader_oh_uptime_total,
         "Empyrian_Demolisher_uptime_total": Empyrian_Demolisher_uptime_total,
+        "Claw_uptime_total": Claw_uptime_total,
         "bonereavers_uptime_total": bonereavers_uptime_total,
         "eternal_flame_uptime_total": eternal_flame_uptime_total,
         "death_wish_uptime_total": death_wish_uptime_total,
@@ -1921,7 +1927,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "armor": stats.get("boss_armor", 4644),
         "mh_expertise": stats.get("mh_expertise", 0),
         "oh_expertise": stats.get("oh_expertise", 0),
-        "armor_penetration": stats.get("armor_penetration", 10)/5/100,
+        "armor_penetration": stats.get("armor_penetration", 10)/3.81/100,
         "haste": 1 + stats.get("haste", 0)/1000,
         "haste": haste_val,
         "wf": 1 + stats.get("wf", 0)/1000,
@@ -2021,6 +2027,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "crusader_uptime_total": 0.0,
         "crusader_oh_uptime_total": 0.0,
         "Empyrian_Demolisher_uptime_total": 0.0,
+        "Claw_uptime_total": 0.0,
         "bonereavers_uptime_total": 0.0,
         "eternal_flame_uptime_total": 0.0,
         "death_wish_uptime_total": 0.0,
@@ -2039,6 +2046,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         final_results["crusader_uptime_total"] += chunk["crusader_uptime_total"]
         final_results["crusader_oh_uptime_total"] += chunk["crusader_oh_uptime_total"]
         final_results["Empyrian_Demolisher_uptime_total"] += chunk["Empyrian_Demolisher_uptime_total"]
+        final_results["Claw_uptime_total"] += chunk["Claw_uptime_total"]
         final_results["bonereavers_uptime_total"] += chunk["bonereavers_uptime_total"]
         final_results["eternal_flame_uptime_total"] += chunk["eternal_flame_uptime_total"]
         final_results["death_wish_uptime_total"] += chunk["death_wish_uptime_total"]
@@ -2081,6 +2089,7 @@ def run_simulation(iterations=1000, mh_speed=2.6, oh_speed=2.7,
         "avg_crusader_uptime": final_results["crusader_uptime_total"]/iters,
         "avg_crusader_oh_uptime": final_results["crusader_oh_uptime_total"]/iters,
         "avg_Empyrian_Demolisher_uptime": final_results["Empyrian_Demolisher_uptime_total"]/iters,
+        "avg_Claw_uptime": final_results["Claw_uptime_total"]/iters,
         "avg_bonereavers_uptime": final_results["bonereavers_uptime_total"]/iters,
         "avg_eternal_flame_uptime": final_results["eternal_flame_uptime_total"]/iters,
         "all_attack_counts": final_results["all_attack_counts"],

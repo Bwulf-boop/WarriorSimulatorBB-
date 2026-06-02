@@ -35,20 +35,20 @@ ALL_PROCS = {
         "ignore_if_active": False
     },
         "Flurry Axe": {
-        "chance": 3,   # 13% per main-hand hit
+        "chance": 2.25,   # 13% per main-hand hit
         "mh_extra_hit": True,
         "ignore_if_active": False  # This triggers one extra MH swing
     },
     "Flurry Axe OH": {
-        "chance": 3,   # 13% per main-hand hit
+        "chance": 2.25,   # 13% per main-hand hit
         "mh_extra_hit": True,
         "ignore_if_active": False  # This triggers one extra MH swing
     },
     "Wound": {
-        "chance": 2,           #
+        "chance": 1.5,           #
         "ap_based": True,          # flag to scale with AP
-        "ap_multiplier": 0.30,    # 36.5% of your total AP
-        "base_damage": 22,          # Base damage
+        "ap_multiplier": 0.19,    # 36.5% of your total AP
+        "base_damage": 297,          # Base damage
         "weapon_multiplier": 1.0,
         "ignore_if_active": False   # optional: scale differently for MH/OH
     },
@@ -83,9 +83,18 @@ ALL_PROCS = {
         "ignore_if_active" : False
             # This triggers one extra MH swing
         },
+    "Shadow_oil": {
+        "flat_chance": True,
+        "chance": 0.10,   # 2% per main-hand hit
+        "base_damage": 54,
+        "ap_multiplier": 0.09,
+        "magic_based": True,
+        "ignore_if_active" : False
+            # This triggers one extra MH swing
+        },    
     "DB": {
         "chance": 1.5,           #1.5 ppm
-        "magic_based": True,          # flag for magic dmg
+                 # flag for magic dmg
         "ap_multiplier": 0.24,      # 0.24% of your total AP
         "base_damage": 154,          # Base damage
         "weapon_multiplier": 1.0,   # optional: scale differently for MH/OH
@@ -126,8 +135,13 @@ ALL_PROCS = {
         "duration": 12,           #
         "tick_interval": 2.0,
         "ignore_if_active" : False      # optional, for reference
-    }
-
+    },
+    "Claw": {
+        "chance": 1,       
+        "haste_buff": 0.375,      
+        "duration": 5.0,
+        "ignore_if_active": False
+    },
     }
 
 
@@ -191,7 +205,7 @@ def apply_on_hit_procs(triggered_procs, time, onhit_buffs):
                 max_stacks=max_stacks
             )
         if "arpen_rating_buff" in proc:
-            arpen_percent = proc["arpen_rating_buff"] / 500.0
+            arpen_percent = proc["arpen_rating_buff"] / 382.0
             onhit_buffs.add_buff(
                 proc["name"], "arpen", arpen_percent, proc["duration"], time,
                 ignore_if_active=proc.get("ignore_if_active", False), max_stacks=max_stacks
